@@ -75,8 +75,9 @@ const sections = page.children.filter(n => n.type === 'SECTION').map(s => {{
   }}
   const comp = kids.find(k => k.type === 'COMPONENT');
   const drawn = n => n.type === 'VECTOR' || n.type === 'BOOLEAN_OPERATION' || hasImage(n);
-  const dummy = k => k.type === 'COMPONENT' ? !k.findOne(drawn) : k.children.some(c => c.name === 'Image') && !k.children.some(c => c.name === 'Image' && hasImage(c));
-  return {{ name: s.name, ph: kids.filter(dummy).length, names: kids.filter(k => !inSeq.has(k.name)).map(k => k.name), seq,
+  const dummy = k => k.type === 'COMPONENT' ? !k.findOne(drawn) : k.children.some(c => c.name === 'Image') && !k.children.some(c => (c.name === 'Image' && hasImage(c)) || c.name === 'Artwork');
+  const pic = kids.filter(k => k.type === 'FRAME').map(k => k.children.find(c => c.name === 'Image')).find(Boolean);
+  return {{ name: s.name, img: pic ? [Math.round(pic.width), Math.round(pic.height)] : null, ph: kids.filter(dummy).length, names: kids.filter(k => !inSeq.has(k.name)).map(k => k.name), seq,
     tmpl: comp ? [Math.round(comp.width), comp.children[0] ? Math.round(Math.max(comp.children[0].width, comp.children[0].height)) : 0] : null,
     images: kids.filter(k => k.type === 'FRAME' && k.children.some(c => c.name === 'Image' && hasImage(c))).length }};
 }});
@@ -688,7 +689,7 @@ const hasImage = n => 'fills' in n && Array.isArray(n.fills) && n.fills.some(f =
 const drawn = n => n.type === 'VECTOR' || n.type === 'BOOLEAN_OPERATION' || hasImage(n);
 const isItem = k => KIND === 'icons' ? k.type === 'COMPONENT' : k.type === 'FRAME' && k.children.some(c => c.name === 'Image');
 // a dummy icon has no artwork in it; a dummy image card has no picture
-const isDummy = k => KIND === 'icons' ? !k.findOne(drawn) : !k.children.some(c => c.name === 'Image' && hasImage(c));
+const isDummy = k => KIND === 'icons' ? !k.findOne(drawn) : !k.children.some(c => (c.name === 'Image' && hasImage(c)) || c.name === 'Artwork');
 const sections = page.children.filter(n => n.type === 'SECTION');
 const items = sections.flatMap(sec => sec.children.filter(isItem));
 const dummies = items.filter(isDummy), real = items.length - dummies.length;
@@ -775,15 +776,22 @@ const fillOf = n => ('fills' in n && Array.isArray(n.fills) && n.fills.find(f =>
 const stepX = tmpl.width + 20, stepY = tmpl.height + 20;
 for (let i = 0; i < ITEMS.length; i++) {
   const up = loose(i); if (!up) { log.push('MISSING upload for ' + ITEMS[i].name); continue; }
-  const fill = fillOf(up); if (!fill) { log.push('no image found in upload for ' + ITEMS[i].name); up.remove(); continue; }
+  const fill = fillOf(up);
   let card = sec.children.find(c => isCard(c) && c.name.toLowerCase() === ITEMS[i].name.toLowerCase());
   if (card) changed.push(card.id);
   else { const n = sec.children.filter(isCard).length; card = tmpl.clone(); sec.appendChild(card); card.name = ITEMS[i].name;
     const perRow = Math.max(1, Math.floor((sec.width - 56 + 20) / stepX)); card.x = 28 + (n % perRow) * stepX; card.y = 58 + Math.floor(n / perRow) * stepY; created.push(card.id);
     const label = card.children.find(k => k.type === 'TEXT');
     if (label) { for (const seg of label.getStyledTextSegments(['fontName'])) await figma.loadFontAsync(seg.fontName); label.characters = ITEMS[i].label; } }
-  card.children.find(k => k.name === 'Image').fills = [Object.assign({}, fill, { scaleMode: 'FILL' })];
-  up.remove();
+  const pic = card.children.find(k => k.name === 'Image');
+  for (const old of card.children.filter(k => k.name === 'Artwork')) old.remove();
+  if (fill) { pic.fills = [Object.assign({}, fill, { scaleMode: 'FILL' })]; up.remove(); continue; }
+  // vector artwork has no picture to pour into the card, so the artwork itself sits in the picture area
+  card.insertChild(card.children.indexOf(pic) + 1, up); up.name = 'Artwork';
+  if (card.layoutMode && card.layoutMode !== 'NONE') up.layoutPositioning = 'ABSOLUTE';
+  scaleTo(up, Math.min(1, pic.width * 0.9 / up.width, pic.height * 0.9 / up.height));
+  up.x = pic.x + (pic.width - up.width) / 2; up.y = pic.y + (pic.height - up.height) / 2;
+  if (pic.fills.some(f => f.type === 'IMAGE')) pic.fills = [{ type: 'SOLID', color: { r: .93, g: .93, b: .94 } }];
 }
 fit(sec, 28);
 return { section: sec.id, created, changed, log };""")
@@ -832,6 +840,10 @@ def target_box(kind, slot, state):
             box = next((st.get("box") for st in page.get("sets", []) if st["name"] == slot.split("|")[0]), None)
             return box or [106, 23]
         return [220, 64]
+    if kind == "visuals":
+        # vector artwork sits inside a card's picture area, with a margin
+        w, h = next((sec["img"] for sec in page.get("sections", []) if sec.get("img")), None) or [240, 160]
+        return [max(16, round(w * 0.8)), max(16, round(h * 0.8))]
     return None
 
 
