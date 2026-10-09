@@ -226,6 +226,9 @@ def brand_state(brand_id):
     s = session(brand_id)
     state = s["figma"]["state"]
     plan = s["plan"]
+    run_state = runner.status(brand_id)
+    if run_state.get("kind") == "scan" and run_state.get("state") in ("failed", "done"):
+        s["figma"]["expected"] = []  # a scan that stopped part-way is no longer in progress
     return jsonify({
         "brand": b, "sources": s["sources"], "elements": s["elements"],
         "compared": figma_plan.compare(s["elements"], state) if state else {},

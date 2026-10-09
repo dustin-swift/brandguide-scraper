@@ -14,10 +14,11 @@ echo "Using Claude Code at: $CLAUDE"
 "$CLAUDE" mcp add --scope user --transport http figma https://mcp.figma.com/mcp 2>&1 | sed 's/^/  /'
 cat <<'MSG'
 
-Claude Code will now open. Do these two things, then type /exit:
+Claude Code will now open. Sign in when it asks (or type /login), then type /exit.
 
-  1. Type /login and sign in (skip this if it says you are already signed in).
-  2. Type /mcp, choose "figma", and choose Authenticate. Approve the request in the browser.
+  If you sign in with a Claude subscription and Figma is connected in your Claude account, that is all.
+  If you sign in with a Console (API) account instead, also type /mcp, choose "figma", choose
+  Authenticate, and approve the request in the browser.
 
 MSG
 exec "$CLAUDE"

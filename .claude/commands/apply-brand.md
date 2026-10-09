@@ -6,6 +6,9 @@ argument-hint: "[brand name, optional]"
 Apply the changes the user approved in the Brief Scraper app to the brand's Figma file. Running this command is the
 user's go-ahead to write to that file; do exactly the steps the app lists and nothing else.
 
+Use whichever Figma connector is available and signed in (its tools may be named `mcp__claude_ai_Figma__…` or
+`mcp__figma__…`); if one reports that it needs authentication, use the other.
+
 Brand to use: $ARGUMENTS (if empty, the app uses whichever brand is open in it).
 
 1. Get the plan: `curl -s "http://127.0.0.1:8765/api/claude/apply?brand=<brand, URL-encoded, or omit>"`.

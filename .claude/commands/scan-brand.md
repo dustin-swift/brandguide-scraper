@@ -5,6 +5,9 @@ argument-hint: "[brand name, optional]"
 
 Scan the Figma board for the brand that is open in the Brief Scraper app. This only reads the Figma file.
 
+Use whichever Figma connector is available and signed in (its tools may be named `mcp__claude_ai_Figma__…` or
+`mcp__figma__…`); if one reports that it needs authentication, use the other.
+
 Brand to use: $ARGUMENTS (if empty, the app uses whichever brand is open in it).
 
 1. Ask the app what to run: `curl -s "http://127.0.0.1:8765/api/claude/scan?brand=<brand, URL-encoded, or omit>"`.

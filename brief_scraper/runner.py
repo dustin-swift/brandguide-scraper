@@ -1,8 +1,9 @@
 """Run the scan and apply routines by starting Claude Code in the background, so the app has a button.
 
-Claude Code needs two things set up once on each Mac (see setup.sh): its own sign-in, and the Figma
-MCP server added under the name "figma". The desktop app's sign-in and connectors are not shared
-with a background run.
+Claude Code needs its own sign-in on each Mac (see setup.sh); the desktop app's sign-in is not shared
+with a background run. Signed in with a Claude subscription it gets the account's Figma connector
+(tools named mcp__claude_ai_Figma__*). Otherwise it uses the Figma MCP server that setup.sh adds
+under the name "figma", which then needs authorising with /mcp.
 """
 import glob
 import os
@@ -15,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = {}  # brand id -> {"kind", "state", "log", "started", "problem"}
-ALLOWED = ["mcp__figma", "ReadMcpResourceTool", "ListMcpResourcesTool", "Read", "Write",
+ALLOWED = ["mcp__claude_ai_Figma", "mcp__figma", "ReadMcpResourceTool", "ListMcpResourcesTool", "Read", "Write",
            "Bash(curl:*)", "Bash(.venv/bin/python -m brief_scraper.push:*)", "Bash(mkdir:*)"]
 SETUP_HINT = "Run ./setup.sh in the brief-scraper folder once to sign Claude Code in and connect it to Figma."
 
@@ -41,7 +42,9 @@ def _diagnose(text):
         return "Claude Code is not signed in on this Mac. " + SETUP_HINT
     if "mcp__figma" in low and ("not found" in low or "no such tool" in low or "unknown tool" in low) or "no mcp servers" in low:
         return "Claude Code has no Figma connection. " + SETUP_HINT
-    if "needs authentication" in low or "unauthorized" in low or "401" in low:
+    if "haven't granted" in low or "requested permissions" in low:
+        return "Claude Code was not allowed to use a tool it needed. The details are below; send them to whoever maintains this tool."
+    if ("needs authentication" in low or "unauthorized" in low) and "mcp__claude_ai_figma" not in low:
         return "Claude Code's Figma connection needs signing in again. " + SETUP_HINT
     return None
 
