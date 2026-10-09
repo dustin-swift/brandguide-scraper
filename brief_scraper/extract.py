@@ -230,6 +230,10 @@ def _svg_path(d, ox, oy):
     return "<path " + " ".join(attrs) + "/>"
 
 
+def _bounds(ds):
+    return (min(d["rect"].x0 for d in ds), min(d["rect"].y0 for d in ds), max(d["rect"].x1 for d in ds), max(d["rect"].y1 for d in ds))
+
+
 def page_vector_clusters(page, lines):
     W, area = page.rect.width, page.rect.get_area()
     gap = 0.006 * W
@@ -274,8 +278,26 @@ def page_vector_clusters(page, lines):
     groups = defaultdict(list)
     for i, d in enumerate(keep):
         groups[find(i)].append(d)
+    # A large logo has wider gaps between its parts (wordmark, strength, descriptor line) than the fixed gap
+    # allows, so pieces that sit close relative to their own size are joined into one piece of artwork.
+    parts = [[ds, _bounds(ds)] for ds in groups.values()]
+    merged = True
+    while merged and len(parts) < 400:
+        merged = False
+        for i in range(len(parts)):
+            for j in range(i + 1, len(parts)):
+                a, b = parts[i][1], parts[j][1]
+                reach = max(gap, 0.18 * max(min(a[2] - a[0], a[3] - a[1]), min(b[2] - b[0], b[3] - b[1])))
+                if (b[0] <= a[2] + reach and a[0] <= b[2] + reach and b[1] <= a[3] + reach and a[1] <= b[3] + reach
+                        and max(max(a[2], b[2]) - min(a[0], b[0]), max(a[3], b[3]) - min(a[1], b[1])) <= 0.5 * W):
+                    parts[i] = [parts[i][0] + parts[j][0], _bounds(parts[i][0] + parts[j][0])]
+                    del parts[j]
+                    merged = True
+                    break
+            if merged:
+                break
     clusters = []
-    for ds in groups.values():
+    for ds, _ in parts:
         x0, y0 = min(d["rect"].x0 for d in ds), min(d["rect"].y0 for d in ds)
         x1, y1 = max(d["rect"].x1 for d in ds), max(d["rect"].y1 for d in ds)
         w, h = x1 - x0, y1 - y0

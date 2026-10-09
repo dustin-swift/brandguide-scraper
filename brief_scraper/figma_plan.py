@@ -546,6 +546,10 @@ async function section(name, like) {
 }
 // Vector files are uploaded already at their final size. rescale() is avoided on purpose: the Figma app
 // kept drawing rescaled artwork at its old geometry until someone nudged the frame.
+// An uploaded picture arrives in a box of a fixed shape, with the picture cropped to fill it.
+// Give the box the picture's own proportions so nothing is cut off.
+const natural = async art => { const f = Array.isArray(art.fills) && art.fills.find(x => x.type === 'IMAGE'); if (!f) return;
+  const sz = await figma.getImageByHash(f.imageHash).getSizeAsync(); if (sz.width && sz.height) art.resize(Math.max(1, art.height * sz.width / sz.height), art.height); };
 const scaleTo = (art, f) => { if (Math.abs(f - 1) < 0.02) return;
   art.resize(Math.max(0.01, art.width * f), Math.max(0.01, art.height * f));
   if ('findAll' in art) for (const n of art.findAll(k => 'strokeWeight' in k && typeof k.strokeWeight === 'number' && Array.isArray(k.strokes) && k.strokes.length > 0)) n.strokeWeight = n.strokeWeight * f; };
@@ -730,6 +734,7 @@ const tmpl = (like || sec).children.find(c => c.type === 'COMPONENT');
 const size = tmpl ? tmpl.width : 28, glyph = tmpl && tmpl.children[0] ? Math.max(tmpl.children[0].width, tmpl.children[0].height) : 18, step = size + 22;
 for (let i = 0; i < ITEMS.length; i++) {
   const art = loose(i); if (!art) { log.push('MISSING upload for ' + ITEMS[i].name); continue; }
+  await natural(art);
   let comp = sec.children.find(c => c.type === 'COMPONENT' && c.name.toLowerCase() === ITEMS[i].name.toLowerCase());
   if (comp) { for (const k of [...comp.children]) k.remove(); changed.push(comp.id); }
   else { comp = figma.createComponent(); comp.name = ITEMS[i].name; comp.resize(size, size); comp.fills = tmpl ? JSON.parse(JSON.stringify(tmpl.fills)) : []; comp.clipsContent = false;
@@ -775,6 +780,7 @@ let sec = null;
 const contain = (art, w, h) => scaleTo(art, Math.min(w / art.width, h / art.height));
 for (let i = 0; i < ITEMS.length; i++) {
   const art = loose(i); if (!art) { log.push('MISSING upload for ' + ITEMS[i].name); continue; }
+  await natural(art);
   if (ITEMS[i].slot) {
     const [setName, variant] = ITEMS[i].slot.split('|');
     const set = page.children.find(n => n.type === 'COMPONENT_SET' && n.name === setName);
