@@ -89,7 +89,7 @@ const TABS = [["color","Colours"],["gradient","Gradients"],["text-style","Text s
 const ASSET_TYPES = ["icon","logo","image","graphic"], ROLES = ["primary","secondary","tertiary","text","background"];
 const STATUS = { new: "New", changed: "Differs from the board", same: "Already on the board", "same-value": "Same value as", reference: "Reference only" };
 const $ = id => document.getElementById(id);
-const S = { info: null, brand: null, data: null, step: "materials", tab: "color", q: "", edits: {}, actions: {}, roles: {}, textTargets: {}, logoSlots: {}, stamp: "", timer: null };
+const S = { info: null, brand: null, data: null, step: "materials", tab: "color", q: "", edits: {}, actions: {}, roles: {}, textTargets: {}, logoSlots: {}, fontFallback: "", stamp: "", timer: null };
 
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -251,7 +251,7 @@ function review() {
         h("option", { value: "" }, `Keep ${b.roles[r] || "as is"}`), colours.map(c => h("option", { value: c.hex, selected: S.roles[r] === c.hex }, `${cur(c).name} ${c.hex}`)))))));
   const changes = d.elements.filter(e => ["add", "replace"].includes(action(e))).length + Object.keys(S.roles).length;
   const approve = async () => {
-    const r = await post(`/api/brands/${S.brand}/approve`, { edits: S.edits, actions: Object.fromEntries(d.elements.map(e => [e.id, action(e)])), roles: S.roles, text_targets: S.textTargets, logo_slots: S.logoSlots });
+    const r = await post(`/api/brands/${S.brand}/approve`, { edits: S.edits, actions: Object.fromEntries(d.elements.map(e => [e.id, action(e)])), roles: S.roles, text_targets: S.textTargets, logo_slots: S.logoSlots, font_fallback: S.fontFallback });
     if (r.error) return alert(r.error);
     S.step = "apply"; refresh(true);
   };
@@ -260,6 +260,9 @@ function review() {
     h("div", { class: "rowline", style: { marginBottom: "16px" } }, h("h2", { style: { flex: 1, margin: 0 } }, "What to write to the board"),
       h("button", { class: "btn primary", disabled: !b || !changes, onclick: approve }, `Approve ${changes} change${changes === 1 ? "" : "s"}`)),
     h("div", { class: "layout" }, nav, h("section", {}, rolesPanel,
+      S.tab === "text-style" && h("div", { class: "panel" }, h("h3", {}, "If a font is not installed in Figma"),
+        h("div", { class: "meta", style: { marginBottom: "10px" } }, "A text style can only be written in a font Figma has. Brand fonts usually have to be installed by a person first. Until then you can write the styles in a stand-in font, with the right sizes and the nearest weight, and each one labelled with the font it should be."),
+        h("select", { onchange: e => { S.fontFallback = e.target.value; } }, [["", "Skip styles whose font is missing"], ["Arial", "Write them in Arial for now"], ["Inter", "Write them in Inter for now"]].map(([v, t]) => h("option", { value: v, selected: S.fontFallback === v }, t)))),
       h("div", { class: "tools" }, h("input", { type: "search", placeholder: "Filter this tab", value: S.q, oninput: e => { S.q = e.target.value; clearTimeout(S.qt); S.qt = setTimeout(() => { render(); const s = document.querySelector(".tools input"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }, 250); } }),
         h("button", { class: "btn", onclick: () => setAll("write") }, "Write all shown"), h("button", { class: "btn", onclick: () => setAll("ignore") }, "Ignore all shown")),
       list.length ? h("div", { class: "grid" + (wide ? " wide" : "") }, list.map(card)) : h("div", { class: "meta" }, "Nothing matches."))));

@@ -243,16 +243,25 @@ if (D.text.length) {
   const fonts = await figma.listAvailableFontsAsync();
   const tstyles = await figma.getLocalTextStylesAsync();
   for (const t of D.text) {
-    const fam = fonts.filter(f => f.fontName.family.toLowerCase() === t.family.toLowerCase());
+    const family = n => fonts.filter(f => f.fontName.family.toLowerCase() === n.toLowerCase());
+    let fam = family(t.family), sub = false;
+    if (!fam.length && t.fallback) { fam = family(t.fallback); sub = fam.length > 0; }
     if (!fam.length) { log.push('SKIPPED ' + t.style + ': font "' + t.family + '" is not installed in Figma'); continue; }
     const norm = x => x.toLowerCase().replace(/[^a-z]/g, '');
-    const font = fam.find(f => norm(f.fontName.style) === norm(t.fontStyle)) || fam.find(f => norm(f.fontName.style) === norm(t.fontStyle.replace(/italic/i, '')) ) || fam.find(f => /regular/i.test(f.fontName.style)) || fam[0];
+    const W = { thin: 100, extralight: 200, light: 300, regular: 400, book: 400, medium: 500, semibold: 600, demibold: 600, bold: 700, extrabold: 800, heavy: 800, black: 900 };
+    const wOf = st => { const k = Object.keys(W).sort((a, b) => b.length - a.length).find(k => norm(st).includes(k)); return k ? W[k] : 400; };
+    const ital = st => /italic|oblique/i.test(st);
+    // exact style name if it exists, otherwise the nearest weight with the same slant
+    const font = fam.find(f => norm(f.fontName.style) === norm(t.fontStyle))
+      || [...fam].sort((a, b) => (ital(a.fontName.style) !== ital(t.fontStyle)) - (ital(b.fontName.style) !== ital(t.fontStyle)) || Math.abs(wOf(a.fontName.style) - t.weight) - Math.abs(wOf(b.fontName.style) - t.weight))[0];
     await figma.loadFontAsync(font.fontName);
     let s = tstyles.find(x => x.name.toLowerCase() === t.style.toLowerCase());
     if (!s) { s = figma.createTextStyle(); s.name = t.style; log.push('new text style ' + t.style); } else log.push('updated ' + s.name);
-    s.fontName = font.fontName; s.fontSize = t.size; s.description = t.stamp;
+    s.fontName = font.fontName; s.fontSize = t.size;
+    s.description = sub ? ('SUBSTITUTE FONT: should be ' + t.family + ' ' + t.fontStyle + '. ' + t.stamp).slice(0, 250) : t.stamp;
+    if (sub) log.push('note: ' + t.style + ' written in ' + font.fontName.family + ' ' + font.fontName.style + ' because "' + t.family + '" is not installed; swap the font once it is');
     if (t.lineHeight) s.lineHeight = { unit: 'PERCENT', value: t.lineHeight };
-    if (norm(font.fontName.style) !== norm(t.fontStyle)) log.push('note: ' + t.style + ' uses ' + font.fontName.style + '; "' + t.fontStyle + '" was not available');
+    if (!sub && norm(font.fontName.style) !== norm(t.fontStyle)) log.push('note: ' + t.style + ' uses ' + font.fontName.style + '; "' + t.fontStyle + '" was not available');
     touched.push(s.id);
   }
 }
@@ -379,7 +388,8 @@ def build_plan(brand, elements, compared, review, state):
             if spec:
                 style = (spec.get("style_name") or WEIGHT_NAMES.get(spec["weight"], "Regular")) + (" Italic" if spec["italic"] else "")
                 tokens["text"].append({"style": target, "family": spec["family"], "fontStyle": style.replace("Regular Italic", "Italic"),
-                                       "size": spec["size"], "lineHeight": spec["line_height"], "stamp": _stamp(src(e))})
+                                       "size": spec["size"], "lineHeight": spec["line_height"], "stamp": _stamp(src(e)), "weight": spec["weight"],
+                                       "fallback": review.get("font_fallback") or None})
     steps = []
     if any(tokens.values()):
         n = len(tokens["colors"]), len(tokens["gradients"]), len(tokens["text"]), len(tokens["roles"])
