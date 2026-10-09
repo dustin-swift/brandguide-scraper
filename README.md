@@ -52,10 +52,11 @@ and a temp folder until the app stops. The Figma file is the record, which is wh
 | Images | Image cards in an "Image Library" section on the Visuals page |
 | Logos | A chosen variant of an existing logo component set, or a component in a "Brand Logos" section |
 
+| Guidelines | A text card per rule on a `→ Guidelines` page (created if missing), grouped by topic. This page is not part of the DesignOps template, so the plugin may not show it. A rule of 180 characters or fewer that names one colour, gradient or text style, or belongs to a guideline named after a master component, is also added to that style's or component's description |
 | Components | A new variant on the matching master component (Headers, Buttons, Image, Disclaimer, Roundels, Cards, Price Points, Base Plate, Gradients), set from the values the brief states: fill, border, corner radius, text colour, case, font, sample label |
 
 A component is only written when the brief states at least one of those values. The template's own variants are
-never edited. Components with no matching master (pop-ups, counters and so on), guidelines, fonts, effects and
+never edited. Components with no matching master (pop-ups, counters and so on), effects and
 spacing are shown for reference and are not written.
 
 Brand gradients are also shown as variants on the Gradients master component.

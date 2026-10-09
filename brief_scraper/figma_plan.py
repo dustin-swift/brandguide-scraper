@@ -92,6 +92,134 @@ def section_names(sec):
     return out
 
 
+GUIDELINES_PAGE = "→ Guidelines"
+_HASH_JS = "const hash = t => { let n = 5381; for (let i = 0; i < t.length; i++) n = (n * 33 + t.charCodeAt(i)) >>> 0; return n; };\n"
+
+
+def _hash(text):
+    """Same sum as _HASH_JS, so a card on the board can be compared with a guideline without reading its text back."""
+    n = 5381
+    data = text.encode("utf-16-le")
+    for i in range(0, len(data), 2):
+        n = (n * 33 + int.from_bytes(data[i:i + 2], "little")) & 0xFFFFFFFF
+    return n
+
+
+def guideline_card(el):
+    """Name, group and body text of the card a guideline becomes; None when there is nothing to say."""
+    name = re.sub(r"\s+", " ", el.get("name") or "").strip()
+    lines = [el["description"].strip()] if el.get("description") else []
+    lines += [f"{k}: {v}" for k, v in (el.get("props") or {}).items() if isinstance(v, (str, int, float)) and str(v).strip()]
+    lines += ["• " + r.strip() for r in el.get("rules") or [] if r and r.strip()]
+    if not name or not lines:
+        return None
+    group = name.split("/", 1)[0].strip() if "/" in name else (el.get("section") or "General").strip() or "General"
+    pages = (el.get("source") or {}).get("pages") or []
+    source = " · ".join(x for x in (el.get("source_name", ""), ("p" + ", p".join(str(n) for n in pages[:4])) if pages else "") if x)
+    return {"name": "Guideline/" + name[:90], "title": name.split("/", 1)[-1].strip()[:90], "group": group[:60], "body": "\n".join(lines)[:3000], "source": source[:120]}
+
+
+def scan_guidelines_script(page_id):
+    return f"const PAGE_ID = {json.dumps(page_id)};\n" + _HASH_JS + """const page = await figma.getNodeByIdAsync(PAGE_ID);
+await figma.setCurrentPageAsync(page);
+const cards = page.findAll(n => n.type === 'FRAME' && n.name.startsWith('Guideline/'));
+return { cards: cards.map(c => { const b = c.children.find(k => k.type === 'TEXT' && k.name === 'Body'); return [c.name, b ? hash(b.characters) : 0]; }) };"""
+
+
+def guidelines_script(page_id, items, dry=False):
+    """Write each guideline as a text card on a Guidelines page, grouped by topic. Cards are updated by name, never removed."""
+    return (f"const PAGE_ID = {json.dumps(page_id)}, PAGE_NAME = {json.dumps(GUIDELINES_PAGE)}, DRY = {json.dumps(dry)};\n"
+            "const ITEMS = " + json.dumps(items, ensure_ascii=False) + ";\n") + """const log = [], touched = [];
+let page = PAGE_ID ? await figma.getNodeByIdAsync(PAGE_ID) : figma.root.children.find(p => /guidelines?/i.test(p.name));
+if (DRY) return { wouldCreatePage: !page, cards: ITEMS.length, groups: [...new Set(ITEMS.map(i => i.group))] };
+if (!page) { page = figma.createPage(); page.name = PAGE_NAME;
+  // keep it with the token pages, ahead of the master components
+  const at = figma.root.children.findIndex(p => /master components/i.test(p.name));
+  if (at > 0) figma.root.insertChild(at, page);
+  log.push('new page ' + PAGE_NAME); }
+await figma.setCurrentPageAsync(page);
+let F = 'Inter';
+try { await figma.loadFontAsync({ family: 'Inter', style: 'Regular' }); await figma.loadFontAsync({ family: 'Inter', style: 'Bold' }); }
+catch (e) { F = 'Arial'; await figma.loadFontAsync({ family: 'Arial', style: 'Regular' }); await figma.loadFontAsync({ family: 'Arial', style: 'Bold' }); }
+const ink = { r: .09, g: .1, b: .12 }, soft = { r: .42, g: .45, b: .5 }, solid = c => [{ type: 'SOLID', color: c }];
+const stack = (name, gap, pad) => { const f = figma.createFrame(); f.name = name; f.layoutMode = 'VERTICAL'; f.itemSpacing = gap;
+  f.paddingTop = f.paddingBottom = f.paddingLeft = f.paddingRight = pad; f.primaryAxisSizingMode = 'AUTO'; f.counterAxisSizingMode = 'AUTO'; f.fills = []; return f; };
+const text = (parent, name, style, size, colour) => { const t = figma.createText(); t.name = name; t.fontName = { family: F, style }; t.fontSize = size; t.fills = solid(colour);
+  parent.appendChild(t); t.layoutSizingHorizontal = 'FILL'; t.textAutoResize = 'HEIGHT'; return t; };
+const set = async (t, chars) => { for (const seg of t.getStyledTextSegments(['fontName'])) await figma.loadFontAsync(seg.fontName); t.characters = chars; };
+let root = page.children.find(n => n.type === 'FRAME' && n.name === 'Brand Guidelines');
+if (!root) { root = stack('Brand Guidelines', 64, 64); root.fills = solid({ r: .96, g: .96, b: .97 }); page.appendChild(root);
+  root.x = page.children.length > 1 ? Math.max(...page.children.filter(n => n !== root).map(n => n.x + n.width)) + 200 : 0; root.y = 0; }
+for (const it of ITEMS) {
+  let group = root.children.find(n => n.name === 'Guideline group/' + it.group);
+  if (!group) { group = stack('Guideline group/' + it.group, 24, 0); root.appendChild(group);
+    const head = figma.createText(); head.name = 'Group title'; head.fontName = { family: F, style: 'Bold' }; head.fontSize = 32; head.fills = solid(ink); head.characters = it.group; group.appendChild(head);
+    const row = figma.createFrame(); row.name = 'Cards'; row.fills = []; row.layoutMode = 'HORIZONTAL'; row.layoutWrap = 'WRAP'; row.itemSpacing = 24; row.counterAxisSpacing = 24;
+    group.appendChild(row); row.resize(1832, 100); row.primaryAxisSizingMode = 'FIXED'; row.counterAxisSizingMode = 'AUTO'; }
+  const row = group.children.find(n => n.name === 'Cards');
+  let card = row.children.find(n => n.name === it.name) || root.findOne(n => n.type === 'FRAME' && n.name === it.name);
+  const fresh = !card;
+  if (fresh) { card = stack(it.name, 12, 24); card.fills = solid({ r: 1, g: 1, b: 1 }); card.cornerRadius = 12; row.appendChild(card);
+    card.resize(440, 100); card.counterAxisSizingMode = 'FIXED'; card.primaryAxisSizingMode = 'AUTO';
+    text(card, 'Title', 'Bold', 18, ink); const b = text(card, 'Body', 'Regular', 13, ink); b.lineHeight = { unit: 'PERCENT', value: 150 }; text(card, 'Source', 'Regular', 11, soft); }
+  const part = n => card.children.find(k => k.type === 'TEXT' && k.name === n);
+  if (part('Title')) await set(part('Title'), it.title);
+  if (part('Body')) await set(part('Body'), it.body);
+  if (part('Source')) await set(part('Source'), [it.source, it.stamp].filter(Boolean).join('\\n'));
+  touched.push(card.id); log.push((fresh ? 'new guideline ' : 'updated ') + it.name);
+}
+return { page: page.name, pageId: page.id, cards: touched.length, groups: root.children.length, log };"""
+
+
+def usage_notes(guidelines, elements):
+    """Short rules that name one colour, gradient or text style, or one kind of master component.
+
+    Returns ({style name: [rules]}, {component category: [rules]}). A rule is attached only when it names the
+    item outright, so general rules stay on the Guidelines page alone."""
+    named = {}
+    for e in elements:
+        style = colour_style_name(e) if e["type"] == "color" and e.get("hex") else gradient_style_name(e) if e["type"] == "gradient" else e["name"] if e["type"] == "text-style" else None
+        label = re.sub(r"^(gradient|brand|type)\s*/\s*", "", e.get("name") or "", flags=re.I).strip()
+        if style and len(label) >= 3 and not label.lower().startswith("observed"):
+            named[style] = re.compile(rf"(?<![\w-]){re.escape(label)}(?![\w-])", re.I)
+    styles, sets = {}, {}
+    for g in guidelines:
+        for rule in [r.strip() for r in g.get("rules") or [] if r and 0 < len(r.strip()) <= 180]:
+            for style, pat in named.items():
+                if pat.search(rule) and rule not in styles.setdefault(style, []):
+                    styles[style].append(rule)
+        for cat, pat in COMPONENT_PAGES.items():
+            if cat != "image" and re.search(rf"\b({pat})\b", g.get("name") or "", re.I):
+                sets.setdefault(cat, []).extend(r.strip() for r in g.get("rules") or [] if r and len(r.strip()) <= 180)
+    return {k: v[:5] for k, v in styles.items() if v}, {k: v[:6] for k, v in sets.items() if v}
+
+
+_NOTE_JS = """const withNotes = (old, rules) => { const keep = (old || '').split('\\n').filter(l => l && !l.startsWith('Usage: ') && !l.startsWith('• '));
+  return ['Usage: ' + rules[0], ...rules.slice(1).map(r => '• ' + r), ...keep].join('\\n').slice(0, 900); };
+"""
+
+
+def style_notes_script(notes):
+    """Put the rules that name a style into that style's description, where Figma shows them on hover."""
+    return "const NOTES = " + json.dumps(notes, ensure_ascii=False) + ";\n" + _NOTE_JS + """const log = [];
+const styles = [...await figma.getLocalPaintStylesAsync(), ...await figma.getLocalTextStylesAsync()];
+for (const [name, rules] of Object.entries(NOTES)) {
+  const st = styles.find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (!st) { log.push('SKIPPED usage note for ' + name + ': no such style on the board'); continue; }
+  st.description = withNotes(st.description, rules); log.push('usage note on ' + st.name + ' (' + rules.length + ')');
+}
+return { log };"""
+
+
+def component_notes_script(page_id, rules):
+    return f"const PAGE_ID = {json.dumps(page_id)}, RULES = {json.dumps(rules, ensure_ascii=False)};\n" + _NOTE_JS + """const page = await figma.getNodeByIdAsync(PAGE_ID);
+await figma.setCurrentPageAsync(page);
+const set = page.children.find(n => n.type === 'COMPONENT_SET');
+if (!set) return { log: ['SKIPPED usage note: no master component on ' + page.name] };
+set.description = withNotes(set.description, RULES);
+return { set: set.name, log: ['usage note on the ' + set.name + ' master component (' + RULES.length + ')'] };"""
+
+
 def scan_steps_core():
     return [{"id": "core", "kind": "script", "title": "Read variables, styles and pages", "code": scan_core_script()}]
 
@@ -102,7 +230,14 @@ def scan_steps_pages(core):
         page = next((p for p in core.get("pages", []) if re.search(rf"\b({pattern})\b", p["name"], re.I)), None)
         if page:
             steps.append({"id": kind, "kind": "script", "title": f"Read the {page['name']} page", "code": scan_page_script(page["id"])})
+    page = _guidelines_page(core)
+    if page:
+        steps.append({"id": "guidelines", "kind": "script", "title": f"Read the {page['name']} page", "code": scan_guidelines_script(page["id"])})
     return steps
+
+
+def _guidelines_page(core):
+    return next((p for p in core.get("pages", []) if re.search(r"\bguidelines?\b", p["name"], re.I)), None)
 
 
 # ------------------------------------------------------------------------------------ comparing
@@ -197,6 +332,7 @@ def compare(elements, state):
     grads = [p for p in core.get("paints", []) if p.get("g")]
     names = {k: {slug(n) for sec in pages[k].get("sections", []) for n in section_names(sec)} for k in PAGE_KINDS}
     out = {}
+    cards = {n.lower(): h for n, h in ((state or {}).get("guidelines") or {}).get("cards", [])}
     palette = [{"name": e["name"], "hex": e["hex"]} for e in elements if e["type"] == "color" and e.get("hex")]
     comp_pages = {c: next((pg["name"] for pg in core.get("pages", []) if re.search(rf"\b({pat})\b", pg["name"], re.I)), None) for c, pat in COMPONENT_PAGES.items()}
     for el in elements:
@@ -242,6 +378,15 @@ def compare(elements, state):
             else:
                 info.update(spec=spec, target=comp_pages[cat].lstrip("→ ").strip(),
                             note="Added as a new variant of the master component, using only the values the brief states. The template's own variants are left as they are.")
+        elif t == "guideline":
+            card = guideline_card(el)
+            if not card:
+                info.update(writable=False, status="reference", note="Nothing to write: this guideline has no rules or description.")
+            else:
+                on_board = cards.get(card["name"].lower())
+                info.update(target=GUIDELINES_PAGE, note="Written as a text card on a Guidelines page in the Figma file. Rules that name a colour, gradient, text style or master component are also added to its description. DesignOps may not show the page.")
+                if on_board is not None:
+                    info.update(status="same" if on_board == _hash(card["body"]) else "changed")
         elif t == "font-family":
             info.update(writable=False, status="reference", note="Set as the board's Headline, Copy or Footnote font in the Brand fonts panel.")
         else:
@@ -737,6 +882,21 @@ def build_plan(brand, elements, compared, review, state):
             steps.append({"id": sid + "-upload", "kind": "upload", "title": f"Upload {len(part)} {kind} files", "pageId": page_id[kind],
                           "count": len(part), "elements": [e["id"] for e in part], "fits": fits})
             steps.append({"id": sid + "-place", "kind": "script", "title": f"Place {len(part)} {kind} on the board", "code": maker(page_id[kind], sid, meta)})
+    notes = [dict(c, stamp=_stamp(src(e))) for e in chosen if e["type"] == "guideline" for c in [guideline_card(e)] if c]
+    if notes:
+        gp = _guidelines_page(core)
+        steps.append({"id": "guidelines", "kind": "script", "code": guidelines_script(gp["id"] if gp else None, notes),
+                      "title": f"Write {len(notes)} guideline{'s' if len(notes) != 1 else ''} to the Guidelines page" + ("" if gp else " (new page)")})
+    # rules that name one style or one kind of component also go in its description
+    style_notes, set_notes = usage_notes([e for e in chosen if e["type"] == "guideline"], elements)
+    if style_notes:
+        steps.append({"id": "style-notes", "kind": "script", "code": style_notes_script(style_notes),
+                      "title": f"Add usage notes to {len(style_notes)} style{'s' if len(style_notes) != 1 else ''}"})
+    for cat, rules in set_notes.items():
+        pg = next((x for x in core.get("pages", []) if re.search(rf"\b({COMPONENT_PAGES[cat]})\b", x["name"], re.I)), None)
+        if pg:
+            steps.append({"id": f"notes-{cat}", "kind": "script", "code": component_notes_script(pg["id"], rules),
+                          "title": f"Add usage notes to the {pg['name'].lstrip('→ ').strip()} master component"})
     # last of all, and only if asked: clear out the template's dummy items
     cleanup = review.get("cleanup") or {}
     grad_page = next((pg for pg in core.get("pages", []) if re.search(COMPONENT_PAGES["gradients"], pg["name"], re.I) and not re.search(r"colou?r", pg["name"], re.I)), None)
