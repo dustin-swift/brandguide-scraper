@@ -52,7 +52,11 @@ and a temp folder until the app stops. The Figma file is the record, which is wh
 | Images | Image cards in an "Image Library" section on the Visuals page |
 | Logos | A chosen variant of an existing logo component set, or a component in a "Brand Logos" section |
 
-Components, guidelines, fonts, effects and spacing are shown for reference and are not written.
+| Components | A new variant on the matching master component (Headers, Buttons, Image, Disclaimer, Roundels, Cards, Price Points, Base Plate, Gradients), set from the values the brief states: fill, border, corner radius, text colour, case, font, sample label |
+
+A component is only written when the brief states at least one of those values. The template's own variants are
+never edited. Components with no matching master (pop-ups, counters and so on), guidelines, fonts, effects and
+spacing are shown for reference and are not written.
 
 The layout of the Figma file is found by pattern on each run (the page whose name contains "Icons", an existing
 item to copy), never by fixed positions, so it follows changes to the DesignOps template where it can and says so

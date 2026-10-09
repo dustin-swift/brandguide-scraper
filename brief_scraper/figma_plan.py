@@ -15,6 +15,12 @@ from .extract import slug
 ROLES = ["primary", "secondary", "tertiary", "text", "background"]
 PAGE_KINDS = {"logos": r"logos?", "visuals": r"visuals?|imagery|images?", "icons": r"icons?"}
 SECTION = {"icons": "Brand Icons", "visuals": "Image Library", "logos": "Brand Logos"}
+# master-component category -> how its page is named in the DesignOps template
+COMPONENT_PAGES = {"headers": r"headers?", "buttons": r"buttons?", "image": r"images?", "disclaimer": r"disclaimers?",
+                   "roundels": r"roundels?", "cards": r"cards?", "price-points": r"price\s*points?", "base-plate": r"base\s*plates?",
+                   "gradients": r"gradients?"}
+SPEC_KEYS = ("fill", "text_color", "border_color", "border_width", "corner_radius", "text_case", "font_family", "font_weight",
+             "font_size", "sample_text")
 WEIGHT_NAMES = {100: "Thin", 200: "Extra Light", 300: "Light", 400: "Regular", 500: "Medium", 600: "Semi Bold",
                 700: "Bold", 800: "Extra Bold", 900: "Black"}
 UPLOAD_PREFIX = "BSUP-"
@@ -131,6 +137,54 @@ def text_spec(el):
             "line_height": el.get("line_height_percent"), "style_name": style_name}
 
 
+def component_spec(el, palette):
+    """What a brief states about a component, reduced to values a master-component variant can take.
+
+    Uses the structured `spec` Claude returns where present, and otherwise reads the free-form
+    properties. Colours may be given as hex or by the brand's own colour names.
+    """
+    raw = {k: str(v).strip() for k, v in (el.get("spec") or {}).items() if str(v).strip()}
+    props = {re.sub(r"[\s_]+", "-", k.lower()): str(v) for k, v in (el.get("properties") or {}).items()}
+
+    def first(key, *hints):
+        if raw.get(key):
+            return raw[key]
+        return next((v for k, v in props.items() if any(h == k or h in k for h in hints)), "")
+
+    def colour(value):
+        m = re.search(r"#[0-9A-Fa-f]{6}\b", value or "")
+        if m:
+            return m.group(0).upper()
+        low = slug(value or "")
+        hit = [c for c in palette if slug(c["name"]) and slug(c["name"]) in low]
+        return max(hit, key=lambda c: len(c["name"]))["hex"].upper() if hit else None
+
+    def number(value):
+        m = re.search(r"(\d+(?:\.\d+)?)", value or "")
+        return float(m.group(1)) if m else None
+
+    radius_text = first("corner_radius", "radius", "shape", "corner").lower()
+    radius = 999.0 if re.search(r"pill|fully|circle|circular|999", radius_text) else number(radius_text)
+    font = first("font_family", "font-family", "family", "typeface")
+    weight_text = (first("font_weight", "weight") + " " + (props.get("text-style", "") if not raw.get("font_weight") else "")).lower().replace(" ", "")
+    words = dict({n.lower().replace(" ", ""): w for w, n in WEIGHT_NAMES.items()}, heavy=800, demibold=600, book=400)
+    word = next((k for k in sorted(words, key=len, reverse=True) if k in weight_text), None)
+    spec = {
+        "fill": colour(first("fill", "fill", "background", "surface")),
+        "textColor": colour(first("text_color", "text-color", "text-colour", "label-color", "font-color")),
+        "stroke": colour(first("border_color", "border", "stroke", "outline")),
+        "strokeWeight": number(first("border_width", "border-width", "stroke-width", "stroke-weight")),
+        "radius": radius,
+        "textCase": "UPPER" if re.search(r"upper|all\s*caps|capital", first("text_case", "case", "capital").lower()) else None,
+        "fontFamily": re.split(r"[,;]", font)[0].strip().strip("\"'") or None,
+        "fontWeight": words.get(word) if word else None,
+        "fontStyle": (word.title() if word in ("heavy", "book") else WEIGHT_NAMES.get(words[word])) if word else None,
+        "fontSize": number(first("font_size", "font-size", "text-size")) if re.search(r"\d", first("font_size", "font-size", "text-size")) else None,
+        "sample": first("sample_text", "label", "sample")[:60] or None,
+    }
+    return {k: v for k, v in spec.items() if v not in (None, "")}
+
+
 def compare(elements, state):
     """Annotate each element with how it relates to what is on the board. Returns {id: info}."""
     core = (state or {}).get("core") or {}
@@ -140,6 +194,8 @@ def compare(elements, state):
     grads = [p for p in core.get("paints", []) if p.get("g")]
     names = {k: {slug(n) for sec in pages[k].get("sections", []) for n in section_names(sec)} for k in PAGE_KINDS}
     out = {}
+    palette = [{"name": e["name"], "hex": e["hex"]} for e in elements if e["type"] == "color" and e.get("hex")]
+    comp_pages = {c: next((pg["name"] for pg in core.get("pages", []) if re.search(rf"\b({pat})\b", pg["name"], re.I)), None) for c, pat in COMPONENT_PAGES.items()}
     for el in elements:
         t, info = el["type"], {"status": "new", "target": None, "current": None, "writable": True}
         if t == "color" and el.get("hex"):
@@ -172,6 +228,17 @@ def compare(elements, state):
         elif t == "logo":
             if slug(asset_layer_name(el)) in names["logos"]:
                 info.update(status="same", target=asset_layer_name(el))
+        elif t == "component":
+            cat, spec = el.get("category"), component_spec(el, palette)
+            if cat not in COMPONENT_PAGES:
+                info.update(writable=False, status="reference", note="No matching master component in the DesignOps template, so this is kept for reference.")
+            elif not comp_pages.get(cat):
+                info.update(writable=False, status="reference", note=f"This Figma file has no {cat} master-component page.")
+            elif not spec:
+                info.update(writable=False, status="reference", note="The brief describes this component but states no value that can be set (fill, radius, text colour, case or font).")
+            else:
+                info.update(spec=spec, target=comp_pages[cat].lstrip("→ ").strip(),
+                            note="Added as a new variant of the master component, using only the values the brief states. The template's own variants are left as they are.")
         else:
             info.update(writable=False, status="reference", note="Kept for reference; not written to Figma.")
         if t in ("icon", "image", "graphic", "logo") and not el.get("asset"):
@@ -370,6 +437,68 @@ if (need > group.height) {
 return { group: group.id, created, changed, log };""")
 
 
+def components_script(page_id, items):
+    """Add (or refresh) one variant per brand component on a master-component page."""
+    return (_JS_HELPERS + f"const PAGE_ID = {json.dumps(page_id)}, ITEMS = {json.dumps(items, ensure_ascii=False)};\n" + """const page = await figma.getNodeByIdAsync(PAGE_ID);
+await figma.setCurrentPageAsync(page);
+const log = [], created = [], changed = [];
+const set = page.children.find(n => n.type === 'COMPONENT_SET');
+if (!set) throw new Error('No master component set on this page.');
+const vars = await figma.variables.getLocalVariablesAsync();
+const cols = await figma.variables.getLocalVariableCollectionsAsync();
+const colorCol = cols.find(c => /^colou?rs?$/i.test(c.name));
+const fonts = await figma.listAvailableFontsAsync();
+const prop = Object.keys(set.componentPropertyDefinitions)[0] || 'Variant';
+const variants = () => set.children.filter(c => c.type === 'COMPONENT');
+const uniq = a => [...new Set(a.map(Math.round))].sort((x, y) => x - y);
+const xs = uniq(variants().map(c => c.x)), ys = uniq(variants().map(c => c.y)), first = variants()[0];
+const perRow = Math.max(1, xs.length), dx = xs.length > 1 ? xs[1] - xs[0] : first.width + 20, dy = ys.length > 1 ? ys[1] - ys[0] : first.height + 20;
+const pad = Math.max(0, set.width - Math.max(...variants().map(c => c.x + c.width)));
+// a colour is bound to the brand's variable when one holds exactly that value
+const paintFor = hex => { const p = { type: 'SOLID', color: rgb(hex) };
+  const v = colorCol && vars.find(x => { if (x.variableCollectionId !== colorCol.id || x.resolvedType !== 'COLOR') return false; const val = x.valuesByMode[colorCol.defaultModeId]; return val && 'r' in val && hx(val) === hex.toUpperCase(); });
+  return v ? figma.variables.setBoundVariableForPaint(p, 'color', v) : p; };
+const norm = x => x.toLowerCase().replace(/[^a-z]/g, '');
+const W = { thin: 100, extralight: 200, light: 300, regular: 400, book: 400, medium: 500, semibold: 600, demibold: 600, bold: 700, extrabold: 800, heavy: 800, black: 900 };
+const wOf = st => { const k = Object.keys(W).sort((a, b) => b.length - a.length).find(k => norm(st).includes(k)); return k ? W[k] : 400; };
+const loadOwn = async t => { for (const seg of t.getStyledTextSegments(['fontName'])) await figma.loadFontAsync(seg.fontName); };
+const attempt = (what, name, fn) => { try { fn(); } catch (e) { log.push('note: could not set ' + what + ' on ' + name + ' (' + String(e && e.message || e).slice(0, 80) + ')'); } };
+for (const it of ITEMS) {
+  const s = it.spec, vname = prop + '=' + it.name;
+  let comp = variants().find(c => c.name.toLowerCase() === vname.toLowerCase());
+  if (comp) changed.push(comp.id);
+  else { const base = (it.base && variants().find(c => c.name.toLowerCase().endsWith('=' + it.base))) || first;
+    const n = variants().length; comp = base.clone(); set.appendChild(comp); comp.name = vname;
+    comp.x = xs[0] + (n % perRow) * dx; comp.y = ys[0] + Math.floor(n / perRow) * dy; created.push(comp.id); }
+  comp.description = it.stamp;
+  const slots = comp.findAll(k => k.name.startsWith('slot:'));
+  const surface = slots.find(k => k.type !== 'TEXT' && !/image/i.test(k.name)), texts = slots.filter(k => k.type === 'TEXT');
+  const main = texts.find(k => /label|title/i.test(k.name)) || texts[0];
+  if (surface) {
+    if (s.fill) attempt('fill', it.name, () => { surface.fills = [paintFor(s.fill)]; });
+    if (s.stroke) attempt('border', it.name, () => { surface.strokes = [paintFor(s.stroke)]; surface.strokeWeight = s.strokeWeight || 1; });
+    if (s.radius != null && 'cornerRadius' in surface) attempt('corner radius', it.name, () => { surface.cornerRadius = Math.min(s.radius, Math.min(surface.width, surface.height) / 2 > 0 && s.radius >= 999 ? 999 : s.radius); });
+  } else if (s.fill || s.radius != null || s.stroke) log.push('note: ' + it.name + ' has no surface layer to take a fill, border or radius');
+  let font = null;
+  if (s.fontFamily) { const fam = fonts.filter(f => f.fontName.family.toLowerCase() === s.fontFamily.toLowerCase());
+    if (!fam.length) log.push('note: ' + it.name + ' keeps the template font because "' + s.fontFamily + '" is not installed in Figma');
+    else { const want = s.fontStyle || 'Regular', wt = s.fontWeight || 400;
+      font = (fam.find(f => norm(f.fontName.style) === norm(want)) || [...fam].sort((a, b) => Math.abs(wOf(a.fontName.style) - wt) - Math.abs(wOf(b.fontName.style) - wt))[0]).fontName;
+      await figma.loadFontAsync(font); } }
+  for (const t of texts) {
+    await loadOwn(t);
+    if (s.textColor) attempt('text colour', it.name, () => { t.fills = [paintFor(s.textColor)]; });
+    if (font) attempt('font', it.name, () => { t.fontName = font; });
+    if (s.textCase) attempt('text case', it.name, () => { t.textCase = s.textCase; });
+  }
+  if (main) { if (s.fontSize) attempt('font size', it.name, () => { main.fontSize = s.fontSize; }); if (s.sample) attempt('sample text', it.name, () => { main.characters = s.sample; }); }
+  const tag = comp.children.find(k => k.type === 'TEXT' && k.name === 'Variant label');
+  if (tag) { await loadOwn(tag); tag.characters = it.name.toUpperCase(); }
+}
+set.resizeWithoutConstraints(Math.max(...variants().map(c => c.x + c.width)) + pad, Math.max(...variants().map(c => c.y + c.height)) + pad);
+return { set: set.name, created, changed, log };""")
+
+
 def place_icons_script(page_id, step_id, items):
     return (f"const PAGE_ID = {json.dumps(page_id)}, PREFIX = {json.dumps(UPLOAD_PREFIX + step_id + '-')}, ITEMS = {json.dumps(items, ensure_ascii=False)}, NAME = {json.dumps(SECTION['icons'])};\n"
             + _PLACE_COMMON + """const like = page.children.find(n => n.type === 'SECTION' && n.name !== NAME && n.children.some(c => c.type === 'COMPONENT'));
@@ -497,6 +626,19 @@ def build_plan(brand, elements, compared, review, state):
                           "title": f"Update the Colours page ({len(cards)} specimen{'s' if len(cards) != 1 else ''}, and every HEX label)"})
         else:
             skipped_early = "the Colours page: no page with that name was found, so only variables and styles were written"
+    palette = [{"name": e["name"], "hex": e["hex"]} for e in elements if e["type"] == "color" and e.get("hex")]
+    for cat, pat in COMPONENT_PAGES.items():
+        comps = [e for e in chosen if e["type"] == "component" and e.get("category") == cat and compared[e["id"]].get("spec")]
+        page = next((pg for pg in core.get("pages", []) if re.search(rf"\b({pat})\b", pg["name"], re.I)), None)
+        if comps and page:
+            items = []
+            for e in comps:
+                spec = component_spec(e, palette)
+                name = re.sub(r"^\s*(buttons?|headers?|cards?|roundels?|disclaimers?|gradients?)\s*[/:]\s*", "", e["name"], flags=re.I).strip() or e["name"]
+                items.append({"name": name[:40], "spec": spec, "base": "pill" if spec.get("radius", 0) >= 999 else None,
+                              "stamp": (_stamp(src(e)) + ((" · " + e["description"]) if e.get("description") else ""))[:280]})
+            steps.append({"id": f"components-{cat}", "kind": "script", "code": components_script(page["id"], items),
+                          "title": f"Add {len(items)} variant{'s' if len(items) != 1 else ''} to the {page['name'].lstrip('→ ').strip()} master component"})
     slots = review.get("logo_slots") or {}
     groups = [("icons", "icon", place_icons_script, 40), ("visuals", "image", place_images_script, 30), ("logos", "logo", place_logos_script, 20)]
     skipped = [locals()["skipped_early"]] if "skipped_early" in locals() else []

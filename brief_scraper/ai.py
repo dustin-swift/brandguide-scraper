@@ -31,7 +31,7 @@ SCHEMA = {
                            "type": {"type": "string", "enum": RELABEL_TYPES}, "include": {"type": "boolean"}}}},
         "elements": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
-            "required": ["type", "name", "category", "description", "properties", "rules", "values_from", "bbox"],
+            "required": ["type", "name", "category", "description", "properties", "spec", "rules", "values_from", "bbox"],
             "properties": {
                 "type": {"type": "string", "enum": NEW_TYPES},
                 "name": {"type": "string"},
@@ -40,6 +40,11 @@ SCHEMA = {
                 "properties": {"type": "array", "items": {
                     "type": "object", "additionalProperties": False, "required": ["key", "value"],
                     "properties": {"key": {"type": "string"}, "value": {"type": "string"}}}},
+                "spec": {"type": "object", "additionalProperties": False,
+                         "required": ["fill", "text_color", "border_color", "border_width", "corner_radius", "text_case",
+                                      "font_family", "font_weight", "font_size", "sample_text"],
+                         "properties": {k: {"type": "string"} for k in ("fill", "text_color", "border_color", "border_width", "corner_radius",
+                                                                         "text_case", "font_family", "font_weight", "font_size", "sample_text")}},
                 "rules": {"type": "array", "items": {"type": "string"}},
                 "values_from": {"type": "string", "enum": ["text", "visual-estimate"]},
                 "bbox": {"type": "array", "items": {"type": "number"}}}}},
@@ -67,7 +72,13 @@ style for that role. Leave out elements you would not change.
 elements: things the parser cannot see. Use these types:
 - component: a reusable UI or layout piece the brief defines (button, header, card, disclaimer, roundel, price \
 point, pop-up, counter, container and so on). Put its kind in category, one of {", ".join(COMPONENT_CATEGORIES)}. \
-List each stated property as a key and value (corner-radius, fill, text-style, alignment, padding, variants).
+List each stated property as a key and value (corner-radius, fill, text-style, alignment, padding, variants). \
+Also fill in spec, which is what gets built in Figma: fill, text_color and border_color as #RRGGBB (use the hex from \
+brand_palette when the page names a brand colour); border_width, corner_radius and font_size as a number of pixels \
+("pill" for a fully rounded corner radius); text_case as "upper" or "none"; font_family and font_weight as named on \
+the page; sample_text as a short example label if the page shows one. Leave a spec field as an empty string when \
+the page does not state or clearly show it; never guess. When a component comes in several colour versions, return \
+one component per version, named for it (for example "Button/Main Navy" and "Button/Main Teal").
 - text-style: a type role the brief specifies (family, weight, size, tracking, case), when it is stated.
 - effect, spacing, radius, motion: tokens the brief specifies.
 - color or gradient: only when the page shows one that is missing from the parser elements, which happens on \
@@ -194,6 +205,7 @@ def enrich(path, result, add_element, progress=lambda done, total, msg: None, wo
             for a in answer.get("elements", []):
                 el = {"type": a["type"], "name": a["name"].strip() or a["type"], "description": a["description"],
                       "properties": {p["key"]: p["value"] for p in a["properties"]}, "rules": a["rules"],
+                      "spec": {k: v for k, v in (a.get("spec") or {}).items() if str(v).strip()},
                       "include": True, "origin": "interpreted",
                       "confidence": "stated" if a["values_from"] == "text" else "estimated",
                       "section": page["title"], "source": {"pages": [page["number"]], "method": "ai-reading"}}
