@@ -58,6 +58,18 @@ A component is only written when the brief states at least one of those values. 
 never edited. Components with no matching master (pop-ups, counters and so on), guidelines, fonts, effects and
 spacing are shown for reference and are not written.
 
+Brand gradients are also shown as variants on the Gradients master component.
+
+### Clearing the template's placeholders
+
+A new DesignOps file arrives with dummy content: numbered icons with no artwork, image cards with no picture, and
+gradient styles described as placeholders. Review offers a tick box for each kind. When ticked, those dummies are
+deleted at the end of the write, along with any section left empty, so the board holds only brand content.
+
+- A kind is only cleared when the brand has real items of that kind on the board; otherwise the dummies stay.
+- Only items that match those three descriptions are removed. Anything with artwork or a picture in it is kept.
+- This is the one place the tool deletes. Save a version in Figma first (File > Save to version history).
+
 The layout of the Figma file is found by pattern on each run (the page whose name contains "Icons", an existing
 item to copy), never by fixed positions, so it follows changes to the DesignOps template where it can and says so
 where it cannot.

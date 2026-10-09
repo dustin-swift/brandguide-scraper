@@ -50,8 +50,9 @@ const paints = (await figma.getLocalPaintStylesAsync()).map(s => { const p = s.p
   if (p.type === 'SOLID') { o.hex = hx(p.color); const b = p.boundVariables && p.boundVariables.color; if (b && byId[b.id]) o.v = byId[b.id].name; }
   else if (p.gradientStops) o.g = p.gradientStops.map(g => [Math.round(g.position * 1000) / 1000, hx(g.color), Math.round(g.color.a * 100) / 100]);
   return o; });
+const placeholderGradients = paints.filter(p => p.g && /placeholder/i.test(p.d)).map(p => p.n);
 const texts = (await figma.getLocalTextStylesAsync()).map(s => ({ n: s.name, f: s.fontName.family, s: s.fontName.style, z: s.fontSize, lh: s.lineHeight.unit === 'AUTO' ? null : Math.round(s.lineHeight.value * 10) / 10, lu: s.lineHeight.unit }));
-return { file: figma.root.name, pages: figma.root.children.map(p => ({ id: p.id, name: p.name })), hasColorCollection: !!colorCol, colorVars, roles, fontVars,
+return { file: figma.root.name, pages: figma.root.children.map(p => ({ id: p.id, name: p.name })), hasColorCollection: !!colorCol, colorVars, roles, fontVars, placeholderGradients,
   paints, texts, effects: (await figma.getLocalEffectStylesAsync()).map(s => s.name) };"""
 
 
@@ -73,7 +74,9 @@ const sections = page.children.filter(n => n.type === 'SECTION').map(s => {{
       seq.push([prefix, sorted[0], w, nums.length]); nums.forEach(x => inSeq.add(prefix + x)); }}
   }}
   const comp = kids.find(k => k.type === 'COMPONENT');
-  return {{ name: s.name, names: kids.filter(k => !inSeq.has(k.name)).map(k => k.name), seq,
+  const drawn = n => n.type === 'VECTOR' || n.type === 'BOOLEAN_OPERATION' || hasImage(n);
+  const dummy = k => k.type === 'COMPONENT' ? !k.findOne(drawn) : k.children.some(c => c.name === 'Image') && !k.children.some(c => c.name === 'Image' && hasImage(c));
+  return {{ name: s.name, ph: kids.filter(dummy).length, names: kids.filter(k => !inSeq.has(k.name)).map(k => k.name), seq,
     tmpl: comp ? [Math.round(comp.width), comp.children[0] ? Math.round(Math.max(comp.children[0].width, comp.children[0].height)) : 0] : null,
     images: kids.filter(k => k.type === 'FRAME' && k.children.some(c => c.name === 'Image' && hasImage(c))).length }};
 }});
@@ -257,6 +260,9 @@ def board_summary(state):
             "pages_found": [k for k in PAGE_KINDS if (state or {}).get(k)],
             "roles": core.get("roles") or {v["n"]: v["hex"] for v in core.get("colorVars", []) if v["n"] in ROLES},
             "paints": core.get("paints", []), "texts": core.get("texts", []),
+            "placeholders": {"icons": sum(sec.get("ph", 0) for sec in ((state or {}).get("icons") or {}).get("sections", [])),
+                             "visuals": sum(sec.get("ph", 0) for sec in ((state or {}).get("visuals") or {}).get("sections", [])),
+                             "gradients": len(core.get("placeholderGradients", []))},
             "logo_slots": [f"{s['name']}|{v.split('=')[-1]}" for s in ((state or {}).get("logos") or {}).get("sets", []) for v in s.get("variants", [])]}
 
 
@@ -499,6 +505,68 @@ set.resizeWithoutConstraints(Math.max(...variants().map(c => c.x + c.width)) + p
 return { set: set.name, created, changed, log };""")
 
 
+def cleanup_page_script(page_id, kind, dry=False):
+    """Remove the template's dummy icons or image cards, once real brand items are on the page."""
+    return f"const PAGE_ID = {json.dumps(page_id)}, KIND = {json.dumps(kind)}, DRY = {json.dumps(dry)};\n" + """const page = await figma.getNodeByIdAsync(PAGE_ID);
+await figma.setCurrentPageAsync(page);
+const hasImage = n => 'fills' in n && Array.isArray(n.fills) && n.fills.some(f => f.type === 'IMAGE');
+const drawn = n => n.type === 'VECTOR' || n.type === 'BOOLEAN_OPERATION' || hasImage(n);
+const isItem = k => KIND === 'icons' ? k.type === 'COMPONENT' : k.type === 'FRAME' && k.children.some(c => c.name === 'Image');
+// a dummy icon has no artwork in it; a dummy image card has no picture
+const isDummy = k => KIND === 'icons' ? !k.findOne(drawn) : !k.children.some(c => c.name === 'Image' && hasImage(c));
+const sections = page.children.filter(n => n.type === 'SECTION');
+const items = sections.flatMap(sec => sec.children.filter(isItem));
+const dummies = items.filter(isDummy), real = items.length - dummies.length;
+if (!real) return { removed: 0, kept: dummies.length, log: ['SKIPPED: there are no brand ' + KIND + ' on this page yet, so the template placeholders were kept'] };
+const emptied = sections.filter(sec => sec.children.filter(isItem).every(isDummy)).map(sec => sec.name);
+const names = dummies.slice(0, 6).map(k => k.name);
+if (!DRY) { for (const k of dummies) k.remove();
+  for (const sec of sections) if (!sec.removed && !sec.children.some(isItem)) sec.remove(); }
+return { removed: dummies.length, brandItemsKept: real, sectionsRemoved: emptied, examples: names, dryRun: DRY,
+  log: [(DRY ? 'would remove ' : 'removed ') + dummies.length + ' placeholder ' + KIND + (emptied.length ? ' and the empty section' + (emptied.length > 1 ? 's ' : ' ') + emptied.join(', ') : '')] };"""
+
+
+def gradients_board_script(page_id, cleanup, dry=False):
+    """Give every brand gradient a variant on the Gradients master component; optionally drop the placeholders."""
+    return f"const PAGE_ID = {json.dumps(page_id)}, CLEANUP = {json.dumps(cleanup)}, DRY = {json.dumps(dry)};\n" + """const page = await figma.getNodeByIdAsync(PAGE_ID);
+await figma.setCurrentPageAsync(page);
+const log = [], created = [], removed = [];
+const set = page.children.find(n => n.type === 'COMPONENT_SET');
+if (!set) throw new Error('No gradients master component on this page.');
+const styles = await figma.getLocalPaintStylesAsync();
+const isGradient = st => st.paints.some(p => p.type.startsWith('GRADIENT'));
+const isDummy = st => /placeholder/i.test(st.description || '');
+const brand = styles.filter(st => isGradient(st) && !isDummy(st)), dummies = styles.filter(st => isGradient(st) && isDummy(st));
+const prop = Object.keys(set.componentPropertyDefinitions)[0] || 'Variant';
+const variants = () => set.children.filter(c => c.type === 'COMPONENT');
+const uniq = a => [...new Set(a.map(Math.round))].sort((x, y) => x - y);
+const xs = uniq(variants().map(c => c.x)), ys = uniq(variants().map(c => c.y)), first = variants()[0];
+const perRow = Math.max(1, xs.length), dx = xs.length > 1 ? xs[1] - xs[0] : first.width + 20, dy = ys.length > 1 ? ys[1] - ys[0] : first.height + 20;
+const pad = Math.max(0, set.width - Math.max(...variants().map(c => c.x + c.width)));
+const slotOf = c => c.findOne(k => k.name.startsWith('slot:') && k.type !== 'TEXT');
+if (!DRY) for (const st of brand) {
+  const label = st.name.replace(/^gradient\s*\/\s*/i, '');
+  let comp = variants().find(c => c.name.toLowerCase() === (prop + '=' + label).toLowerCase());
+  if (!comp) { comp = first.clone(); set.appendChild(comp); comp.name = prop + '=' + label; created.push(comp.id); }
+  const slot = slotOf(comp); if (slot) await slot.setFillStyleIdAsync(st.id);
+  const tag = comp.children.find(k => k.type === 'TEXT' && k.name === 'Variant label');
+  if (tag) { for (const seg of tag.getStyledTextSegments(['fontName'])) await figma.loadFontAsync(seg.fontName); tag.characters = label.toUpperCase(); }
+}
+if (CLEANUP) {
+  if (!brand.length) log.push('SKIPPED: there are no brand gradients yet, so the template placeholders were kept');
+  else {
+    const ids = new Set(dummies.map(st => st.id));
+    const gone = variants().filter(c => { const sl = slotOf(c); return sl && typeof sl.fillStyleId === 'string' && ids.has(sl.fillStyleId); });
+    removed.push(...gone.map(c => c.name), ...dummies.map(st => st.name));
+    if (!DRY) { for (const c of gone) c.remove(); for (const st of dummies) st.remove(); }
+    log.push((DRY ? 'would remove ' : 'removed ') + dummies.length + ' placeholder gradient styles and ' + gone.length + ' variants that showed them');
+  }
+}
+if (!DRY) { variants().forEach((c, i) => { c.x = xs[0] + (i % perRow) * dx; c.y = ys[0] + Math.floor(i / perRow) * dy; });
+  set.resizeWithoutConstraints(Math.max(...variants().map(c => c.x + c.width)) + pad, Math.max(...variants().map(c => c.y + c.height)) + pad); }
+return { set: set.name, brandGradients: brand.map(st => st.name), created, removed, dryRun: DRY, log };"""
+
+
 def place_icons_script(page_id, step_id, items):
     return (f"const PAGE_ID = {json.dumps(page_id)}, PREFIX = {json.dumps(UPLOAD_PREFIX + step_id + '-')}, ITEMS = {json.dumps(items, ensure_ascii=False)}, NAME = {json.dumps(SECTION['icons'])};\n"
             + _PLACE_COMMON + """const like = page.children.find(n => n.type === 'SECTION' && n.name !== NAME && n.children.some(c => c.type === 'COMPONENT'));
@@ -657,4 +725,20 @@ def build_plan(brand, elements, compared, review, state):
             steps.append({"id": sid + "-upload", "kind": "upload", "title": f"Upload {len(part)} {kind} files", "pageId": page_id[kind],
                           "count": len(part), "elements": [e["id"] for e in part], "fits": fits})
             steps.append({"id": sid + "-place", "kind": "script", "title": f"Place {len(part)} {kind} on the board", "code": maker(page_id[kind], sid, meta)})
+    # last of all, and only if asked: clear out the template's dummy items
+    cleanup = review.get("cleanup") or {}
+    grad_page = next((pg for pg in core.get("pages", []) if re.search(COMPONENT_PAGES["gradients"], pg["name"], re.I) and not re.search(r"colou?r", pg["name"], re.I)), None)
+    if tokens["gradients"] or cleanup.get("gradients"):
+        if grad_page:
+            steps.append({"id": "gradients-board", "kind": "script", "code": gradients_board_script(grad_page["id"], bool(cleanup.get("gradients"))),
+                          "title": "Show the brand gradients on the Gradients master component" + (" and remove the placeholder gradients" if cleanup.get("gradients") else "")})
+        elif cleanup.get("gradients"):
+            skipped.append("placeholder gradients: no Gradients page found")
+    for kind in ("icons", "visuals"):
+        if cleanup.get(kind):
+            if page_id[kind]:
+                steps.append({"id": f"cleanup-{kind}", "kind": "script", "code": cleanup_page_script(page_id[kind], kind),
+                              "title": f"Remove the template's placeholder {kind}"})
+            else:
+                skipped.append(f"placeholder {kind}: no matching page found")
     return {"steps": steps, "skipped": skipped}
