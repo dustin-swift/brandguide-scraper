@@ -211,3 +211,22 @@ def from_reference(name, data, mime):
 def fingerprint(asset):
     data = asset["data"].encode("utf-8") if isinstance(asset["data"], str) else asset["data"]
     return hashlib.sha1(data).hexdigest()
+
+
+def fit_svg(svg, box):
+    """Return the SVG with its width and height set so it fits inside box, keeping its viewBox."""
+    m = re.search(r"<svg\b[^>]*>", svg)
+    if not m or not box:
+        return svg
+    tag = m.group(0)
+    num = lambda name: (lambda x: float(x.group(1)) if x else None)(re.search(rf'\b{name}="\s*([\d.]+)(?:px)?\s*"', tag))
+    vb = re.search(r'viewBox="\s*([-\d.eE]+)[ ,]+([-\d.eE]+)[ ,]+([\d.eE]+)[ ,]+([\d.eE]+)\s*"', tag)
+    w, h = (float(vb.group(3)), float(vb.group(4))) if vb else (num("width"), num("height"))
+    if not w or not h:
+        return svg
+    k = min(box[0] / w, box[1] / h)
+    new = re.sub(r'\s(?:width|height)="[^"]*"', "", tag)
+    if not vb:
+        new = new[:-1] + f' viewBox="0 0 {w:g} {h:g}">'
+    new = new[:-1].rstrip("/") + f' width="{w * k:.3f}" height="{h * k:.3f}">'
+    return svg[:m.start()] + new + svg[m.end():]

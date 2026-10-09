@@ -61,10 +61,13 @@ const sections = page.children.filter(n => n.type === 'SECTION').map(s => {{
     if (nums.length >= 5 && nums.every(x => x.length === w) && sorted.every((x, i) => x === sorted[0] + i)) {{
       seq.push([prefix, sorted[0], w, nums.length]); nums.forEach(x => inSeq.add(prefix + x)); }}
   }}
+  const comp = kids.find(k => k.type === 'COMPONENT');
   return {{ name: s.name, names: kids.filter(k => !inSeq.has(k.name)).map(k => k.name), seq,
+    tmpl: comp ? [Math.round(comp.width), comp.children[0] ? Math.round(Math.max(comp.children[0].width, comp.children[0].height)) : 0] : null,
     images: kids.filter(k => k.type === 'FRAME' && k.children.some(c => c.name === 'Image' && hasImage(c))).length }};
 }});
-const sets = page.children.filter(n => n.type === 'COMPONENT_SET').map(s => ({{ name: s.name, variants: s.children.map(c => c.name) }}));
+const box = c => {{ const b = c.findOne(n => n.name === 'Brand artwork') || c; return [Math.round(b.width), Math.round(b.height)]; }};
+const sets = page.children.filter(n => n.type === 'COMPONENT_SET').map(s => ({{ name: s.name, variants: s.children.map(c => c.name), box: s.children[0] ? box(s.children[0]) : null }}));
 return {{ page: page.name, sections, sets }};"""
 
 
@@ -285,6 +288,11 @@ async function section(name, like) {
       l.characters = name.toUpperCase(); } }
   log.push('new section ' + name); return sec;
 }
+// Vector files are uploaded already at their final size. rescale() is avoided on purpose: the Figma app
+// kept drawing rescaled artwork at its old geometry until someone nudged the frame.
+const scaleTo = (art, f) => { if (Math.abs(f - 1) < 0.02) return;
+  art.resize(Math.max(0.01, art.width * f), Math.max(0.01, art.height * f));
+  if ('findAll' in art) for (const n of art.findAll(k => 'strokeWeight' in k && typeof k.strokeWeight === 'number' && Array.isArray(k.strokes) && k.strokes.length > 0)) n.strokeWeight = n.strokeWeight * f; };
 const fit = (sec, pad) => { const kids = sec.children; if (!kids.length) return;
   sec.resizeWithoutConstraints(Math.max(sec.width, Math.max(...kids.map(k => k.x + k.width)) + pad), Math.max(...kids.map(k => k.y + k.height)) + pad); };
 """
@@ -305,7 +313,7 @@ for (let i = 0; i < ITEMS.length; i++) {
     const perRow = Math.max(1, Math.floor((sec.width - 56) / step)); comp.x = 28 + (n % perRow) * step; comp.y = 72 + Math.floor(n / perRow) * step; created.push(comp.id); }
   comp.description = ITEMS[i].stamp;
   comp.appendChild(art); art.name = 'Glyph'; if ('fills' in art) art.fills = [];
-  art.rescale(glyph / Math.max(art.width, art.height)); art.x = (comp.width - art.width) / 2; art.y = (comp.height - art.height) / 2;
+  scaleTo(art, glyph / Math.max(art.width, art.height)); art.x = (comp.width - art.width) / 2; art.y = (comp.height - art.height) / 2;
 }
 fit(sec, 28);
 return { section: sec.id, created, changed, log };""")
@@ -340,7 +348,7 @@ def place_logos_script(page_id, step_id, items):
     return (f"const PAGE_ID = {json.dumps(page_id)}, PREFIX = {json.dumps(UPLOAD_PREFIX + step_id + '-')}, ITEMS = {json.dumps(items, ensure_ascii=False)}, NAME = {json.dumps(SECTION['logos'])};\n"
             + _PLACE_COMMON + """const like = page.children.find(n => n.type === 'SECTION' && n.name !== NAME);
 let sec = null;
-const contain = (art, w, h) => { art.rescale(Math.min(w / art.width, h / art.height)); };
+const contain = (art, w, h) => scaleTo(art, Math.min(w / art.width, h / art.height));
 for (let i = 0; i < ITEMS.length; i++) {
   const art = loose(i); if (!art) { log.push('MISSING upload for ' + ITEMS[i].name); continue; }
   if (ITEMS[i].slot) {
@@ -365,6 +373,20 @@ for (let i = 0; i < ITEMS.length; i++) {
 }
 if (sec) fit(sec, 28);
 return { section: sec && sec.id, created, changed, log };""")
+
+
+def target_box(kind, slot, state):
+    """The box a vector should fill when it lands on the board, so it never needs scaling there."""
+    page = (state or {}).get(kind) or {}
+    if kind == "icons":
+        glyph = next((sec["tmpl"][1] for sec in page.get("sections", []) if sec.get("tmpl") and sec["tmpl"][1] and sec["name"] != SECTION["icons"]), 18)
+        return [glyph, glyph]
+    if kind == "logos":
+        if slot:
+            box = next((st.get("box") for st in page.get("sets", []) if st["name"] == slot.split("|")[0]), None)
+            return box or [106, 23]
+        return [220, 64]
+    return None
 
 
 def build_plan(brand, elements, compared, review, state):
@@ -409,7 +431,8 @@ def build_plan(brand, elements, compared, review, state):
             part = items[b:b + batch]
             sid = f"{kind}{b // batch + 1}"
             meta = [{"name": asset_layer_name(e), "label": e["name"], "stamp": _stamp(src(e)), **({"slot": slots[e["id"]]} if kind == "logos" and slots.get(e["id"]) else {})} for e in part]
+            fits = [target_box(kind, m.get("slot"), state) for m in meta]
             steps.append({"id": sid + "-upload", "kind": "upload", "title": f"Upload {len(part)} {kind} files", "pageId": page_id[kind],
-                          "count": len(part), "elements": [e["id"] for e in part]})
+                          "count": len(part), "elements": [e["id"] for e in part], "fits": fits})
             steps.append({"id": sid + "-place", "kind": "script", "title": f"Place {len(part)} {kind} on the board", "code": maker(page_id[kind], sid, meta)})
     return {"steps": steps, "skipped": skipped}

@@ -245,7 +245,11 @@ def asset(brand_id, el_id):
     if not a:
         abort(404)
     # assets come from untrusted files: never let the browser run them as a document
-    return Response(a["data"], mimetype=a["mime"], headers={
+    data = a["data"]
+    fit = re.fullmatch(r"([\d.]+)x([\d.]+)", request.args.get("fit", ""))
+    if fit and a["format"] == "svg":
+        data = sources.fit_svg(data, [float(fit.group(1)), float(fit.group(2))])
+    return Response(data, mimetype=a["mime"], headers={
         "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
         "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"})
 
@@ -354,7 +358,7 @@ def claude_apply():
     b, s = _target()
     if not s["plan"]:
         return jsonify({"error": f"Nothing is approved for {b['name']} yet. Review and press Approve in the app first."}), 409
-    steps = [{k: v for k, v in st.items() if k != "elements"} for st in s["plan"]["steps"] if st["id"] not in s["results"]]
+    steps = [{k: v for k, v in st.items() if k not in ("elements", "fits")} for st in s["plan"]["steps"] if st["id"] not in s["results"]]
     return jsonify({"brand": b["name"], "fileKey": b["file_key"], "steps": steps, "skipped": s["plan"]["skipped"],
                     "post_results_to": f"/api/claude/apply/result?brand={b['id']}"})
 
@@ -369,7 +373,8 @@ def claude_apply_files():
     prefix = figma_plan.UPLOAD_PREFIX + step["id"].replace("-upload", "") + "-"
     return jsonify({"brand": b["id"], "files": [
         {"filename": f"{prefix}{i}.{ext[s['assets'][eid]['format']]}", "mime": s["assets"][eid]["mime"],
-         "path": f"/api/brands/{b['id']}/asset/{eid}"} for i, eid in enumerate(step["elements"])]})
+         "path": f"/api/brands/{b['id']}/asset/{eid}" + (f"?fit={fit[0]}x{fit[1]}" if fit else "")}
+        for i, (eid, fit) in enumerate(zip(step["elements"], step.get("fits") or [None] * len(step["elements"])))]})
 
 
 @app.post("/api/claude/apply/result")

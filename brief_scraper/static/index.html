@@ -327,7 +327,7 @@ function apply() {
     h("h2", {}, "Write the approved changes to Figma"),
     h("p", { class: "lede" }, "Claude Code carries these out through your Figma connection, one step at a time. Everything it adds is labelled as coming from Brief Scraper."),
     done === 0 && h("div", { class: "notice" }, "Before you run this, save a restore point in Figma: File → Save to version history (⌥⌘S). The Figma connection cannot save one for you, and it is the only undo for a batch of changes."),
-    h("div", { class: "panel" }, runBox("apply", done ? "Continue writing to Figma" : "Write to Figma", "/apply-brand", done === p.steps.length),
+    h("div", { class: "panel" }, runBox("apply", done === p.steps.length ? "Finished" : done ? "Continue writing to Figma" : "Write to Figma", "/apply-brand", done === p.steps.length),
       h("div", { class: "meta", style: { marginTop: "10px" } }, done === p.steps.length ? "All steps have run." : done ? `${done} of ${p.steps.length} steps done. Press the button again to continue if it stopped.` : "This page updates as each step finishes.")),
     p.skipped.length > 0 && h("div", { class: "notice" }, "Left out of the plan: " + p.skipped.join("; ")),
     h("div", { class: "panel plan" }, h("h3", {}, "Plan"), h("ol", {}, p.steps.map(s => h("li", {}, s.title, " ",
