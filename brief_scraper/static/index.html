@@ -7,379 +7,320 @@
 <style>
 :root {
   --bg: #f6f6f4; --panel: #ffffff; --ink: #16181d; --muted: #6b7080; --line: #e3e4e8; --accent: #e5333d;
-  --accent-ink: #ffffff; --chip: #eef0f3; --ok: #0a7d55; --warn: #a15c00; --warn-bg: #fff4d9; --check: #d9dbe0;
+  --chip: #eef0f3; --ok: #0a7d55; --warn: #a15c00; --warn-bg: #fff4d9; --check: #d9dbe0; --new: #0b5fa5; --code: #f0f1f4;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #14161a; --panel: #1d2026; --ink: #eceef2; --muted: #9aa0ad; --line: #2e323b; --chip: #2a2e37;
-    --ok: #4cc79a; --warn: #f0b860; --warn-bg: #3a2f17; --check: #343944; }
+    --ok: #4cc79a; --warn: #f0b860; --warn-bg: #3a2f17; --check: #343944; --new: #7ec8f2; --code: #262a33; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
 button, input, select { font: inherit; color: inherit; }
 header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: #0b0c0f; color: #fff; position: sticky; top: 0; z-index: 5; }
-header h1 { font-size: 15px; letter-spacing: .08em; text-transform: uppercase; margin: 0; color: var(--accent); font-weight: 800; }
-header .file { color: #b9bdc8; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+header h1 { font-size: 15px; letter-spacing: .08em; text-transform: uppercase; margin: 0; color: var(--accent); font-weight: 800; cursor: pointer; }
+header .crumb { color: #b9bdc8; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
-a.btn { color: inherit; text-decoration: none; white-space: nowrap; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.ghost { background: transparent; border-color: #3a3d46; color: #fff; }
+.btn.small { padding: 4px 10px; font-weight: 500; }
 .btn:disabled { opacity: .5; cursor: default; }
 main { padding: 24px; max-width: 1500px; margin: 0 auto; }
-.start { max-width: 720px; margin: 6vh auto 0; }
-.start h2 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; }
-.start p { color: var(--muted); margin: 0 0 20px; }
-.drop { border: 2px dashed var(--line); border-radius: 14px; background: var(--panel); padding: 44px 24px; text-align: center; cursor: pointer; }
-.drop.over { border-color: var(--accent); }
-.drop strong { display: block; font-size: 16px; margin-bottom: 4px; }
-.opts { display: grid; gap: 12px; margin-top: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-.opts label { display: flex; gap: 10px; align-items: flex-start; }
-.opts small { color: var(--muted); display: block; }
-.opts select { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); padding: 3px 6px; }
-.bar { height: 8px; background: var(--chip); border-radius: 99px; overflow: hidden; margin: 14px 0 8px; }
-.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+h2 { font-size: 22px; margin: 0 0 6px; text-wrap: balance; } h3 { font-size: 15px; margin: 0 0 8px; }
+.lede { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.field { display: grid; gap: 4px; margin-bottom: 10px; } .field span { color: var(--muted); font-size: 12.5px; }
+input[type=text], input[type=url], input[type=search], select { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 8px 10px; min-width: 0; }
+.steps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.steps button { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 7px 16px; cursor: pointer; font-weight: 600; }
+.steps button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.steps button small { font-weight: 500; opacity: .7; margin-left: 6px; }
+.drop { border: 2px dashed var(--line); border-radius: 14px; background: var(--panel); padding: 30px 24px; text-align: center; }
+.drop.over { border-color: var(--accent); } .drop strong { display: block; font-size: 16px; margin-bottom: 6px; }
+.rowline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.src { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); } .src:first-child { border-top: 0; }
+.src .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; } .src .meta { font-weight: 400; }
 .notice { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
-.layout { display: grid; grid-template-columns: 220px 1fr; gap: 24px; align-items: start; }
+.cmd { background: var(--code); border-radius: 8px; padding: 10px 14px; font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; display: inline-flex; gap: 14px; align-items: center; margin: 6px 0; }
+.stat { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.stat div { background: var(--bg); border-radius: 10px; padding: 12px; } .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.layout { display: grid; grid-template-columns: 210px 1fr; gap: 24px; align-items: start; }
 nav { position: sticky; top: 76px; display: grid; gap: 2px; }
 nav button { display: flex; justify-content: space-between; gap: 8px; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
 nav button.on { background: var(--ink); color: var(--bg); font-weight: 700; }
-nav button span { color: var(--muted); font-variant-numeric: tabular-nums; }
-nav button.on span { color: inherit; opacity: .7; }
+nav button span { color: var(--muted); font-variant-numeric: tabular-nums; } nav button.on span { color: inherit; opacity: .7; }
 nav button.empty { opacity: .45; }
-.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
-.tools input[type=search] { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.tools .hint { color: var(--muted); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; } .tools input[type=search] { flex: 1; min-width: 160px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 .grid.wide { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-.card.off { opacity: .5; }
-.pre { height: 120px; display: grid; place-items: center; border-bottom: 1px solid var(--line); overflow: hidden; }
+.card.off { opacity: .55; }
+.pre { height: 110px; display: grid; place-items: center; border-bottom: 1px solid var(--line); overflow: hidden; }
 .pre.art { background-color: var(--panel); background-image: linear-gradient(45deg, var(--check) 25%, transparent 25%, transparent 75%, var(--check) 75%), linear-gradient(45deg, var(--check) 25%, transparent 25%, transparent 75%, var(--check) 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
-.pre img { max-width: 88%; max-height: 100px; object-fit: contain; }
-.pre.text { padding: 0 14px; justify-items: start; white-space: nowrap; }
+.pre img { max-width: 88%; max-height: 92px; object-fit: contain; }
+.pre.split { grid-template-columns: 1fr 1fr; place-items: stretch; } .pre.split div { display: grid; place-items: end start; padding: 6px 8px; font-size: 11px; color: #fff; text-shadow: 0 0 3px #000; }
 .body { padding: 12px; display: grid; gap: 8px; flex: 1; align-content: start; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.row input[type=text] { flex: 1; min-width: 130px; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; background: transparent; font-weight: 700; }
+.row input[type=text] { flex: 1; min-width: 120px; border-color: transparent; background: transparent; font-weight: 700; padding: 4px 6px; border-radius: 6px; }
 .row input[type=text]:hover, .row input[type=text]:focus { border-color: var(--line); background: var(--bg); outline: none; }
-.row select { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); padding: 3px 4px; }
-.meta { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
-.meta code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
+.card select { padding: 4px 6px; border-radius: 6px; max-width: 100%; }
+.meta { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; } .meta code { font: 12px ui-monospace, Menlo, monospace; color: var(--ink); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { background: var(--chip); border-radius: 99px; padding: 2px 8px; font-size: 11.5px; border: 0; color: inherit; }
 button.chip { cursor: pointer; text-decoration: underline; }
-.chip.exact { color: var(--ok); } .chip.estimated, .chip.approximate { color: var(--warn); }
+.chip.exact, .chip.same { color: var(--ok); } .chip.estimated, .chip.approximate, .chip.changed { color: var(--warn); } .chip.new { color: var(--new); }
 .props { margin: 0; padding: 0; list-style: none; font-size: 12.5px; display: grid; gap: 2px; }
-.props b { font-weight: 600; }
+.roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.roles .dot, .dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); display: inline-block; vertical-align: -2px; }
+.plan li { margin: 6px 0; } .plan .ok { color: var(--ok); } .plan .bad { color: var(--warn); }
 dialog { border: 0; border-radius: 12px; padding: 0; max-width: min(1200px, 94vw); background: var(--panel); color: var(--ink); }
-dialog::backdrop { background: rgba(0,0,0,.6); }
-#pluginBody { padding: 20px 22px; width: min(760px, 92vw); display: grid; gap: 14px; max-height: 86vh; overflow: auto; }
-#pluginBody h2 { margin: 0; font-size: 18px; } #pluginBody h3 { margin: 6px 0 0; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-#pluginBody .f { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; align-items: center; }
-#pluginBody input[type=text], #pluginBody input[type=number], #pluginBody select { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); padding: 6px 8px; min-width: 0; }
-#pluginBody .trio { display: grid; grid-template-columns: 1fr 130px 80px; gap: 8px; }
-#pluginBody .picks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-#pluginBody .picks label { display: flex; gap: 6px; align-items: center; }
-#pluginBody .dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); display: inline-block; }
-#pluginBody .end { display: flex; justify-content: flex-end; gap: 10px; }
-dialog img { display: block; max-width: 100%; max-height: 82vh; }
+dialog::backdrop { background: rgba(0,0,0,.6); } dialog img { display: block; max-width: 100%; max-height: 82vh; }
 dialog .cap { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; grid-auto-flow: column; overflow-x: auto; } main { padding: 16px; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>Brief Scraper</h1>
-  <div class="file" id="file"></div>
-  <button class="btn ghost" id="again" hidden>New brief</button>
-  <select id="assetMode" hidden title="How artwork is written into the export" style="background:#0b0c0f;color:#fff;border:1px solid #3a3d46;border-radius:8px;padding:8px">
-    <option value="data-url">Artwork as data: URLs</option>
-    <option value="blocks">Artwork as referenced blocks</option>
-  </select>
-  <button class="btn ghost" id="plugin" hidden>Plugin design.md…</button>
-  <button class="btn primary" id="export" hidden>Export .md</button>
-</header>
+<header><h1 id="home">Brief Scraper</h1><div class="crumb" id="crumb"></div></header>
 <main id="main"></main>
-<dialog id="pluginDialog"><div id="pluginBody"></div></dialog>
 <dialog id="pageDialog"><div class="cap"><strong id="pageCap"></strong><button class="btn" id="pageClose">Close</button></div><img id="pageImg" alt=""></dialog>
 <script>
-const TABS = [["color","Colours"],["gradient","Gradients"],["font-family","Font families"],["text-style","Text styles"],
-  ["logo","Logos"],["icon","Icons"],["image","Images"],["graphic","Graphics"],["component","Components"],
-  ["effect","Effects"],["spacing","Spacing"],["radius","Radii"],["motion","Motion"],["guideline","Guidelines"]];
-const ASSET_TYPES = ["icon","logo","image","graphic"];
+const TABS = [["color","Colours"],["gradient","Gradients"],["text-style","Text styles"],["logo","Logos"],["icon","Icons"],["image","Images"],
+  ["graphic","Graphics"],["font-family","Font families"],["component","Components"],["guideline","Guidelines"],["effect","Effects"],["spacing","Spacing"],["radius","Radii"],["motion","Motion"]];
+const ASSET_TYPES = ["icon","logo","image","graphic"], ROLES = ["primary","secondary","tertiary","text","background"];
+const STATUS = { new: "New", changed: "Differs from the board", same: "Already on the board", "same-value": "Same value as", reference: "Reference only" };
 const $ = id => document.getElementById(id);
-const state = { status: null, job: null, els: [], edits: {}, tab: "color", q: "", showOff: true };
+const S = { info: null, brand: null, data: null, step: "materials", tab: "color", q: "", edits: {}, actions: {}, roles: {}, textTargets: {}, logoSlots: {}, stamp: "", timer: null };
 
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
-    if (k === "class") el.className = v;
-    else if (k === "style") Object.assign(el.style, v);
+    if (k === "class") el.className = v; else if (k === "style") Object.assign(el.style, v);
     else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else if (v === true) el.setAttribute(k, "");
-    else if (v !== false && v != null) el.setAttribute(k, v);
+    else if (v === true) el.setAttribute(k, ""); else if (v !== false && v != null) el.setAttribute(k, v);
   }
-  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  for (const kid of kids.flat(3)) if (kid != null && kid !== false) el.append(kid);
   return el;
 }
-const cur = el => ({ include: el.include, name: el.name, type: el.type, ...(state.edits[el.id] || {}) });
-const edit = (el, patch) => { state.edits[el.id] = { ...(state.edits[el.id] || {}), ...patch }; };
+const api = async (path, opts) => { const r = await fetch(path, opts); return r.json(); };
+const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const cur = el => ({ name: el.name, type: el.type, ...(S.edits[el.id] || {}) });
+const cmp = el => (S.data.compared || {})[el.id] || { status: S.data.board ? "new" : null, writable: !["component","guideline","font-family","effect","spacing","radius","motion"].includes(el.type) };
+const defaultAction = el => { const c = cmp(el); if (!c.writable) return "none"; if (!el.include) return "ignore"; return c.status === "changed" ? "replace" : c.status === "new" ? "add" : "ignore"; };
+const action = el => S.actions[el.id] || defaultAction(el);
+const copy = t => navigator.clipboard && navigator.clipboard.writeText(t);
+const cmd = text => h("div", { class: "cmd" }, text, h("button", { class: "btn small", onclick: e => { copy(text); e.target.textContent = "Copied"; } }, "Copy"));
 
-async function init() {
-  state.status = await (await fetch("/api/status")).json();
-  renderStart();
-}
-
-function renderStart(message) {
-  $("export").hidden = $("again").hidden = $("assetMode").hidden = $("plugin").hidden = true; $("file").textContent = "";
-  const ai = state.status.ai_available;
-  const input = h("input", { type: "file", accept: "application/pdf", hidden: true, onchange: e => e.target.files[0] && upload(e.target.files[0]) });
-  const drop = h("div", { class: "drop", onclick: () => input.click(),
-    ondragover: e => { e.preventDefault(); drop.classList.add("over"); },
-    ondragleave: () => drop.classList.remove("over"),
-    ondrop: e => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && upload(e.dataTransfer.files[0]); } },
-    h("strong", {}, "Drop a client brand book PDF here"), "or click to choose a file", input);
-  $("main").replaceChildren(h("div", { class: "start" },
-    h("h2", {}, "Turn a brand book into ingestible design-system data"),
-    h("p", {}, "Colours, gradients, fonts, logos, icons and images are read from the PDF's own data. You review them, then export one .md file for the Figma plugin."),
-    message && h("div", { class: "notice" }, message),
-    drop,
-    h("div", { class: "opts" },
-      h("label", {}, h("input", { type: "checkbox", id: "useAi", checked: ai, disabled: !ai }),
-        h("div", {}, "Use Claude to name, classify and read components",
-          h("small", {}, ai ? `Sends each page image and its text to the Claude API (${state.status.model}). Leave off for documents that must stay on this machine.`
-                            : "Off: no ANTHROPIC_API_KEY found. Add one to a .env file next to run.sh and restart to enable it."))),
-      h("label", {}, h("div", {}, "Largest image edge in the export ",
-        h("select", { id: "maxEdge" }, [[512, "512 px"], [1024, "1024 px"], [2048, "2048 px"], [0, "original size"]].map(([v, t]) => h("option", { value: v, selected: v === 1024 }, t))),
-        h("small", {}, "Images are embedded in the export, which is split into .md files under 1 MB each. Larger images mean more files."))))));
-}
-
-async function upload(file) {
-  const fd = new FormData();
-  fd.append("file", file); fd.append("use_ai", $("useAi").checked ? "1" : "0"); fd.append("max_edge", $("maxEdge").value);
-  const bar = h("i"), msg = h("div", { class: "meta" }, "Uploading");
-  $("file").textContent = file.name;
-  $("main").replaceChildren(h("div", { class: "start" }, h("h2", {}, "Reading the brief"), h("div", { class: "bar" }, bar), msg));
-  const res = await fetch("/api/jobs", { method: "POST", body: fd });
-  const data = await res.json();
-  if (!res.ok) return renderStart(data.error || "Upload failed.");
-  for (;;) {
-    await new Promise(r => setTimeout(r, 500));
-    const job = await (await fetch("/api/jobs/" + data.id)).json();
-    const p = job.progress || {};
-    bar.style.width = (100 * (p.done || 0) / (p.total || 1)) + "%";
-    msg.textContent = p.message || "";
-    if (job.state === "error") return renderStart("Could not read that PDF: " + job.error);
-    if (job.state === "done") { state.job = job; state.els = job.result.elements; state.edits = {}; break; }
-  }
-  state.tab = (TABS.find(([t]) => state.els.some(e => e.type === t)) || TABS[0])[0];
-  renderReview();
-}
-
-function assetBytes() {
-  let n = 0;
-  for (const el of state.els) if (cur(el).include && el.asset) n += el.asset.format === "svg" ? el.asset.bytes : el.asset.bytes * 1.36;
-  return n;
-}
-
-function renderReview() {
-  const job = state.job, meta = job.result.meta;
-  $("export").hidden = $("again").hidden = $("assetMode").hidden = $("plugin").hidden = false;
-  const included = state.els.filter(e => cur(e).include).length;
-  const parts = Math.max(1, Math.ceil((assetBytes() + 300000) / 940000));
-  $("export").textContent = parts > 1 ? `Export (${included} elements, about ${parts} .md files)` : `Export .md (${included} elements)`;
-  const notices = [];
-  if (meta.looks_scanned) notices.push("This PDF has almost no live text, so it is probably a scan. Exact extraction finds little in scans; the AI pass is the only source for them.");
-  if (job.ai_error) notices.push("The AI pass did not finish: " + job.ai_error + " Results below are from the PDF's own data only.");
-  if (job.ai_problems && job.ai_problems.length) notices.push(`The AI pass failed on ${job.ai_problems.length} page(s): ` + job.ai_problems.map(p => `p${p.page} (${p.error})`).join(", "));
-  if (!job.ai_ran && !job.ai_error) notices.push("AI pass was off: names for unlabelled assets are placeholders, and components, type roles and usage rules were not read. Review the Logos, Icons, Images and Graphics tabs.");
-
-  const typeOf = e => cur(e).type;
-  const nav = h("nav", {}, TABS.map(([t, label]) => {
-    const all = state.els.filter(e => typeOf(e) === t), on = all.filter(e => cur(e).include).length;
-    return h("button", { class: (t === state.tab ? "on " : "") + (all.length ? "" : "empty"), onclick: () => { state.tab = t; renderReview(); } },
-      label, h("span", {}, all.length ? `${on}/${all.length}` : "0"));
-  }));
-  const q = state.q.toLowerCase();
-  const list = state.els.filter(e => typeOf(e) === state.tab)
-    .filter(e => state.showOff || cur(e).include)
-    .filter(e => !q || (cur(e).name + " " + (e.section || "") + " " + (e.hex || "")).toLowerCase().includes(q));
-  const setAll = v => { list.forEach(e => edit(e, { include: v })); renderReview(); };
-  const search = h("input", { type: "search", placeholder: "Filter this tab", value: state.q, oninput: e => { state.q = e.target.value; renderReview(); setTimeout(() => { const s = document.querySelector(".tools input[type=search]"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }); } });
-  const wide = ["component", "guideline", "text-style", "font-family", "effect", "motion", "spacing", "radius"].includes(state.tab);
+// ------------------------------------------------------------------------------------ brands
+async function home() {
+  clearInterval(S.timer); S.brand = null; $("crumb").textContent = "";
+  S.info = await api("/api/brands");
+  const name = h("input", { type: "text", placeholder: "For example: ABRYSVO" }), url = h("input", { type: "url", placeholder: "https://www.figma.com/design/…" });
+  const err = h("div", { class: "meta", style: { color: "var(--warn)" } });
+  const add = async () => { const r = await post("/api/brands", { name: name.value, figma_url: url.value }); if (r.error) err.textContent = r.error; else open(r.id); };
   $("main").replaceChildren(
-    ...notices.map(n => h("div", { class: "notice" }, n)),
-    h("div", { class: "layout" }, nav, h("section", {},
-      h("div", { class: "tools" }, search,
-        h("label", {}, h("input", { type: "checkbox", checked: state.showOff, onchange: e => { state.showOff = e.target.checked; renderReview(); } }), " Show excluded"),
-        h("button", { class: "btn", onclick: () => setAll(true) }, "Include all shown"),
-        h("button", { class: "btn", onclick: () => setAll(false) }, "Exclude all shown")),
-      list.length ? h("div", { class: "grid" + (wide ? " wide" : "") }, list.map(card))
-                  : h("div", { class: "meta" }, state.els.some(e => typeOf(e) === state.tab) ? "Nothing matches." : "Nothing of this kind was found in the brief."))));
+    h("h2", {}, "Brands"),
+    h("p", { class: "lede" }, "A brand is a name and the Figma file its design system lives in. Open one to add materials, compare them with what is on the board, and approve what gets written."),
+    !S.info.ai_available && h("div", { class: "notice" }, "No ANTHROPIC_API_KEY found, so the Claude pass is off: labelled colours, gradients, fonts and artwork are still read from PDFs, but naming, components, websites and ads are not. Add the key to a .env file next to run.sh and restart."),
+    h("div", { class: "cols" },
+      S.info.brands.map(b => h("div", { class: "panel" }, h("h3", {}, b.name), h("div", { class: "meta" }, b.figma_url),
+        h("div", { class: "rowline", style: { marginTop: "12px" } }, h("button", { class: "btn primary", onclick: () => open(b.id) }, "Open"),
+          h("button", { class: "btn", onclick: async () => { if (confirm(`Remove ${b.name} from this list? The Figma file is not touched.`)) { await api("/api/brands/" + b.id, { method: "DELETE" }); home(); } } }, "Remove")))),
+      h("div", { class: "panel" }, h("h3", {}, "Add a brand"),
+        h("label", { class: "field" }, h("span", {}, "Brand name"), name), h("label", { class: "field" }, h("span", {}, "Figma file link"), url), err,
+        h("button", { class: "btn primary", onclick: add }, "Add brand"))));
 }
 
-function preview(el) {
-  const base = `/api/jobs/${state.job.id}/asset/${encodeURIComponent(el.id)}`;
-  if (el.type === "color" && el.hex) return h("div", { class: "pre", style: { background: el.hex } });
+async function open(id) {
+  Object.assign(S, { brand: id, step: "materials", edits: {}, actions: {}, roles: {}, textTargets: {}, logoSlots: {}, stamp: "" });
+  await refresh(true);
+  clearInterval(S.timer); S.timer = setInterval(() => refresh(false), 1500);
+}
+
+async function refresh(force) {
+  if (!S.brand) return;
+  const d = await api("/api/brands/" + S.brand);
+  const stamp = JSON.stringify([d.sources.map(s => [s.id, s.state, s.message, s.count]), d.scanned_at, d.scan_running, d.plan && d.plan.steps.map(s => s.result && s.result.at), d.elements.length]);
+  const busy = document.activeElement && ["INPUT", "SELECT"].includes(document.activeElement.tagName);
+  if (!force && (stamp === S.stamp || busy)) return;
+  S.data = d; S.stamp = stamp; $("crumb").textContent = d.brand.name;
+  if (!TABS.some(([t]) => t === S.tab && d.elements.some(e => cur(e).type === t))) S.tab = (TABS.find(([t]) => d.elements.some(e => cur(e).type === t)) || TABS[0])[0];
+  render();
+}
+
+function render() {
+  const d = S.data, running = d.sources.filter(s => s.state === "running").length;
+  const changes = d.elements.filter(e => ["add", "replace"].includes(action(e))).length;
+  const steps = [["materials", "1 Materials", d.sources.length ? `${d.elements.length} items` : ""], ["board", "2 Figma board", d.scanned_at ? "scanned " + d.scanned_at.slice(11) : "not scanned"],
+    ["review", "3 Review", d.elements.length ? `${changes} to write` : ""], ["apply", "4 Apply", d.plan ? `${d.plan.steps.filter(s => s.result).length}/${d.plan.steps.length}` : ""]];
+  const view = { materials, board, review, apply }[S.step]();
+  $("main").replaceChildren(h("div", { class: "steps" }, steps.map(([k, label, sub]) => h("button", { class: k === S.step ? "on" : "", onclick: () => { S.step = k; render(); } }, label, sub && h("small", {}, sub)))), view);
+}
+
+// --------------------------------------------------------------------------------- materials
+function materials() {
+  const d = S.data, ai = S.info.ai_available;
+  const useAi = h("input", { type: "checkbox", id: "useAi", checked: ai, disabled: !ai }), ref = h("input", { type: "checkbox", id: "isRef", disabled: !ai });
+  const send = async (files, url) => {
+    const fd = new FormData();
+    for (const f of files || []) fd.append("files", f, f.webkitRelativePath || f._path || f.name);
+    if (url) fd.append("url", url);
+    fd.append("use_ai", useAi.checked ? "1" : "0"); fd.append("reference", ref.checked ? "1" : "0");
+    const r = await api(`/api/brands/${S.brand}/sources`, { method: "POST", body: fd });
+    if (r.unsupported && r.unsupported.length) alert("Skipped (not a PDF, image, SVG or text file):\n" + r.unsupported.slice(0, 15).join("\n"));
+    refresh(true);
+  };
+  // dropped folders arrive as directory entries; walk them so every file keeps its path
+  const walk = async entry => entry.isFile ? [await new Promise(res => entry.file(f => { f._path = entry.fullPath.replace(/^\//, ""); res(f); }))]
+    : (await Promise.all((await new Promise(res => { const out = [], rd = entry.createReader(); const more = () => rd.readEntries(b => b.length ? (out.push(...b), more()) : res(out)); more(); })).map(walk))).flat();
+  const pickFiles = h("input", { type: "file", multiple: true, hidden: true, onchange: e => send([...e.target.files]) });
+  const pickDir = h("input", { type: "file", webkitdirectory: true, hidden: true, onchange: e => send([...e.target.files]) });
+  const drop = h("div", { class: "drop", ondragover: e => { e.preventDefault(); drop.classList.add("over"); }, ondragleave: () => drop.classList.remove("over"),
+    ondrop: async e => { e.preventDefault(); drop.classList.remove("over");
+      const entries = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+      send(entries.length ? (await Promise.all(entries.map(walk))).flat() : [...e.dataTransfer.files]); } },
+    h("strong", {}, "Drop brand PDFs, asset folders, images, SVGs or text files here"),
+    h("div", { class: "rowline", style: { justifyContent: "center" } }, h("button", { class: "btn", onclick: () => pickFiles.click() }, "Choose files"), h("button", { class: "btn", onclick: () => pickDir.click() }, "Choose a folder")), pickFiles, pickDir);
+  const url = h("input", { type: "url", placeholder: "https://brand-site.example.com", style: { flex: 1 } });
+  return h("div", {},
+    h("h2", {}, "Materials for " + d.brand.name),
+    h("p", { class: "lede" }, "Add whatever you have. Each source is broken down into individual colours, gradients, type styles, logos, icons and images. Nothing is stored; materials are held only while this app is running."),
+    drop,
+    h("div", { class: "panel", style: { marginTop: "16px" } },
+      h("div", { class: "rowline" }, url, h("button", { class: "btn", disabled: !ai, onclick: () => url.value && send(null, url.value) }, "Read website")),
+      !ai && h("div", { class: "meta" }, "Reading a website needs the Claude pass."),
+      h("label", { class: "rowline", style: { marginTop: "12px" } }, useAi, h("span", {}, "Use Claude to name and sort assets and read components, rules and text files", h("div", { class: "meta" }, ai ? `Sends page images and text to the Claude API (${S.info.model}).` : "Off: no API key."))),
+      h("label", { class: "rowline", style: { marginTop: "8px" } }, ref, h("span", {}, "The images I add next are ads or layouts", h("div", { class: "meta" }, "They are read as evidence of colours and type in use, marked as estimates and left out by default. They are not added to the image library.")))),
+    h("div", { class: "panel" }, h("h3", {}, "Sources"),
+      d.sources.length ? d.sources.map(s => h("div", { class: "src" },
+        h("div", { class: "name" }, s.name, h("div", { class: "meta" }, s.state === "running" ? (s.message || "Working") : s.state === "error" ? "Could not read this: " + s.message : `${s.count} new item${s.count === 1 ? "" : "s"}` + (s.note ? " · " + s.note : "") + (s.skipped ? ` · ${s.skipped.length} file(s) skipped: ${s.skipped.slice(0, 3).join("; ")}` : ""))),
+        h("span", { class: "chip " + (s.state === "done" ? "same" : s.state === "error" ? "changed" : "") }, s.state),
+        s.state !== "running" && h("button", { class: "btn small", onclick: async () => { await api(`/api/brands/${S.brand}/sources/${s.id}`, { method: "DELETE" }); refresh(true); } }, "Remove")))
+        : h("div", { class: "meta" }, "Nothing added yet.")),
+    d.elements.length > 0 && h("button", { class: "btn primary", onclick: () => { S.step = d.scanned_at ? "review" : "board"; render(); } }, d.scanned_at ? "Review against the board" : "Next: scan the Figma board"));
+}
+
+// ------------------------------------------------------------------------------------- board
+function board() {
+  const d = S.data, b = d.board;
+  return h("div", {},
+    h("h2", {}, "The Figma board as it is now"),
+    h("p", { class: "lede" }, "Every session starts from a fresh scan, because the board is the record and can change between sessions. The scan only reads; it changes nothing."),
+    h("div", { class: "panel" }, h("h3", {}, d.scanned_at ? "Scan again any time" : "Scan the board"),
+      h("div", {}, "In Claude Code, opened in the brief-scraper folder, run:"), cmd("/scan-brand"),
+      h("div", { class: "meta" }, d.scan_running ? "Scan in progress…" : d.scanned_at ? `Last scanned ${d.scanned_at}. This page updates by itself when a scan finishes.` : "Claude reads the file through your Figma connection and sends the result here. This page updates by itself."),
+      h("div", { class: "meta" }, h("a", { href: d.brand.figma_url, target: "_blank", rel: "noopener" }, "Open the Figma file"))),
+    b && h("div", { class: "panel" }, h("h3", {}, b.file || "Figma file"),
+      h("div", { class: "stat" }, [["Colours", b.colours], ["Gradients", b.gradients], ["Text styles", b.text_styles], ["Icons", b.icons], ["Images", b.visuals], ["Logo sets", b.logo_sets.length]].map(([k, v]) => h("div", {}, h("b", {}, v), k))),
+      h("div", { class: "meta", style: { marginTop: "12px" } }, "Colour roles: ", ROLES.map(r => [h("span", { class: "dot", style: { background: b.roles[r] || "transparent" } }), ` ${r} ${b.roles[r] || "not set"}   `])),
+      ["logos", "visuals", "icons"].filter(k => !b.pages_found.includes(k)).map(k => h("div", { class: "notice", style: { marginTop: "12px" } }, `No ${k} page was found in this file, so ${k} cannot be placed.`))),
+    b && d.elements.length > 0 && h("button", { class: "btn primary", onclick: () => { S.step = "review"; render(); } }, "Review new material against this"));
+}
+
+// ------------------------------------------------------------------------------------ review
+function review() {
+  const d = S.data, b = d.board;
+  if (!d.elements.length) return h("div", { class: "panel" }, "Add materials first.");
+  const typeOf = e => cur(e).type;
+  const nav = h("nav", {}, TABS.map(([t, label]) => { const all = d.elements.filter(e => typeOf(e) === t), on = all.filter(e => ["add", "replace"].includes(action(e))).length;
+    return all.length ? h("button", { class: t === S.tab ? "on" : "", onclick: () => { S.tab = t; render(); } }, label, h("span", {}, `${on}/${all.length}`)) : null; }));
+  const q = S.q.toLowerCase();
+  const list = d.elements.filter(e => typeOf(e) === S.tab).filter(e => !q || (cur(e).name + " " + (e.section || "") + " " + (e.hex || "") + " " + (e.source_name || "")).toLowerCase().includes(q));
+  const setAll = a => { list.forEach(e => { if (cmp(e).writable) S.actions[e.id] = a === "write" ? (cmp(e).status === "changed" ? "replace" : "add") : "ignore"; }); render(); };
+  const wide = ["component", "guideline", "text-style", "font-family", "effect", "motion", "spacing", "radius"].includes(S.tab);
+  const colours = d.elements.filter(e => typeOf(e) === "color" && e.hex);
+  const rolesPanel = S.tab === "color" && b && h("div", { class: "panel" }, h("h3", {}, "Colour roles"),
+    h("div", { class: "meta", style: { marginBottom: "10px" } }, "The board's five role colours. Leave a role as it is, or point it at one of the new colours."),
+    h("div", { class: "roles" }, ROLES.map(r => h("label", { class: "field" }, h("span", {}, h("span", { class: "dot", style: { background: S.roles[r] || b.roles[r] || "transparent" } }), ` ${r[0].toUpperCase() + r.slice(1)}`),
+      h("select", { onchange: e => { if (e.target.value) S.roles[r] = e.target.value; else delete S.roles[r]; render(); } },
+        h("option", { value: "" }, `Keep ${b.roles[r] || "as is"}`), colours.map(c => h("option", { value: c.hex, selected: S.roles[r] === c.hex }, `${cur(c).name} ${c.hex}`)))))));
+  const changes = d.elements.filter(e => ["add", "replace"].includes(action(e))).length + Object.keys(S.roles).length;
+  const approve = async () => {
+    const r = await post(`/api/brands/${S.brand}/approve`, { edits: S.edits, actions: Object.fromEntries(d.elements.map(e => [e.id, action(e)])), roles: S.roles, text_targets: S.textTargets, logo_slots: S.logoSlots });
+    if (r.error) return alert(r.error);
+    S.step = "apply"; refresh(true);
+  };
+  return h("div", {},
+    !b && h("div", { class: "notice" }, "The Figma board has not been scanned yet, so nothing below can be compared with it. Scan it in step 2 before approving."),
+    h("div", { class: "rowline", style: { marginBottom: "16px" } }, h("h2", { style: { flex: 1, margin: 0 } }, "What to write to the board"),
+      h("button", { class: "btn primary", disabled: !b || !changes, onclick: approve }, `Approve ${changes} change${changes === 1 ? "" : "s"}`)),
+    h("div", { class: "layout" }, nav, h("section", {}, rolesPanel,
+      h("div", { class: "tools" }, h("input", { type: "search", placeholder: "Filter this tab", value: S.q, oninput: e => { S.q = e.target.value; clearTimeout(S.qt); S.qt = setTimeout(() => { render(); const s = document.querySelector(".tools input"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }, 250); } }),
+        h("button", { class: "btn", onclick: () => setAll("write") }, "Write all shown"), h("button", { class: "btn", onclick: () => setAll("ignore") }, "Ignore all shown")),
+      list.length ? h("div", { class: "grid" + (wide ? " wide" : "") }, list.map(card)) : h("div", { class: "meta" }, "Nothing matches."))));
+}
+
+function preview(el, c) {
+  const src = `/api/brands/${S.brand}/asset/${encodeURIComponent(el.id)}`;
+  if (el.type === "color" && el.hex) return c.status === "changed" && c.current
+    ? h("div", { class: "pre split" }, h("div", { style: { background: c.current } }, "on the board"), h("div", { style: { background: el.hex } }, "new"))
+    : h("div", { class: "pre", style: { background: el.hex } });
   if (el.type === "gradient" && el.css) return h("div", { class: "pre", style: { background: el.css } });
-  if (el.asset) return h("div", { class: "pre art" }, h("img", { src: base, alt: "", loading: "lazy" }));
-  if (el.type === "text-style" && el.sample) return h("div", { class: "pre text", style: { fontSize: Math.min(40, Math.max(12, el.size || 16)) + "px", fontWeight: el.weight || 400, fontStyle: el.italic ? "italic" : "normal" } }, el.sample);
+  if (el.asset) return h("div", { class: "pre art" }, h("img", { src, alt: "", loading: "lazy" }));
   return null;
 }
 
-function details(el) {
-  const out = [], code = t => h("code", {}, t);
-  if (el.type === "color") {
-    out.push(h("div", { class: "meta" }, code(el.hex || ""), el.cmyk ? ["  CMYK ", code(el.cmyk.join(" "))] : null, el.pantone ? ["  ", code(el.pantone)] : null));
-    if (el.swatch_matches === false) out.push(h("div", { class: "meta", style: { color: "var(--warn)" } }, `Label says ${el.hex}, but the swatch behind it is filled ${el.swatch_hex}.`));
-  }
-  if (el.type === "gradient") out.push(h("div", { class: "meta" }, el.kind === "linear" ? `${el.angle}° linear` : "radial", " · ", el.stops.map(s => `${s.color || s.hex} ${Math.round(s.position * 100)}%`).join(" → ")));
-  if (el.type === "font-family") out.push(h("div", { class: "meta" }, el.styles.map(s => s.style).join(", ")), h("div", { class: "meta" }, `${(el.usage_share * 100).toFixed(1)}% of the document's text` + (el.named_in_text ? " · named in the brief" : " · never named in the brief")));
-  if (el.type === "text-style" && el.family) out.push(h("div", { class: "meta" }, `${el.family} ${el.style} · ${el.size}px` + (el.line_height_percent ? ` · ${el.line_height_percent}% leading` : "") + ` · ${el.color_name || el.color}`));
-  if (ASSET_TYPES.includes(el.type)) out.push(h("div", { class: "meta" }, el.paths ? `Vector, ${el.paths} paths` : el.pixel_size ? `Raster, ${el.pixel_size.join("×")} px in the PDF` : "", el.recurring ? " · repeats on most pages" : ""));
+function card(el) {
+  const c = cmp(el), e = cur(el), a = action(el), b = S.data.board, pages = (el.source && el.source.pages) || [];
+  const code = t => h("code", {}, t), out = [];
+  if (el.type === "color") out.push(h("div", { class: "meta" }, code(el.hex || ""), el.cmyk ? ["  CMYK ", code(el.cmyk.join(" "))] : null, c.status === "changed" ? ["  board has ", code(c.current)] : null));
+  if (el.type === "gradient") out.push(h("div", { class: "meta" }, el.kind === "radial" ? "radial" : `${el.angle}° linear`, " · ", el.stops.map(s => `${s.color || s.hex} ${Math.round(s.position * 100)}%`).join(" → ")));
+  if (el.type === "font-family") out.push(h("div", { class: "meta" }, (el.styles || []).map(s => s.style).join(", ")), h("div", { class: "meta" }, "Fonts must be installed in Figma by a person; this tool cannot add them."));
+  if (el.type === "text-style") out.push(h("div", { class: "meta" }, c.spec ? `${c.spec.family} · weight ${c.spec.weight}${c.spec.italic ? " italic" : ""} · ${c.spec.size}px` : (el.family ? `${el.family} ${el.style || ""} ${el.size || ""}` : "")));
+  if (ASSET_TYPES.includes(el.type)) out.push(h("div", { class: "meta" }, el.paths ? `Vector, ${el.paths} paths` : el.asset && el.asset.format === "svg" ? "Vector (SVG)" : el.pixel_size ? `Raster, ${el.pixel_size.join("×")} px` : ""));
   if (el.description) out.push(h("div", { class: "meta" }, el.description));
   if (el.properties && Object.keys(el.properties).length) out.push(h("ul", { class: "props" }, Object.entries(el.properties).map(([k, v]) => h("li", {}, h("b", {}, k + ": "), String(v)))));
   if (el.rules && el.rules.length) out.push(h("ul", { class: "props" }, el.rules.map(r => h("li", {}, "• " + r))));
-  if (el.note) out.push(h("div", { class: "meta" }, el.note));
-  return out;
-}
-
-function card(el) {
-  const c = cur(el);
-  const pages = (el.source && el.source.pages) || [];
-  const node = h("div", { class: "card" + (c.include ? "" : " off") },
-    preview(el),
+  if (el.note || c.note) out.push(h("div", { class: "meta" }, el.note || c.note));
+  const extra = [];
+  if (c.writable && a !== "ignore" && el.type === "text-style" && b) extra.push(h("label", { class: "meta" }, "Write to ",
+    h("select", { onchange: ev => { S.textTargets[el.id] = ev.target.value; } }, h("option", { value: e.name, selected: !S.textTargets[el.id] }, "a new style: " + e.name),
+      b.texts.map(t => h("option", { value: t.n, selected: S.textTargets[el.id] === t.n }, `replace ${t.n} (${t.f} ${t.s} ${t.z})`)))));
+  if (c.writable && a !== "ignore" && e.type === "logo" && b) extra.push(h("label", { class: "meta" }, "Place in ",
+    h("select", { onchange: ev => { if (ev.target.value) S.logoSlots[el.id] = ev.target.value; else delete S.logoSlots[el.id]; } }, h("option", { value: "" }, "the Brand Logos section (added)"),
+      b.logo_slots.map(s => h("option", { value: s, selected: S.logoSlots[el.id] === s }, "replace " + s.replace("|", " · "))))));
+  return h("div", { class: "card" + (a === "ignore" || a === "none" ? " off" : "") },
+    preview(el, c),
     h("div", { class: "body" },
-      h("div", { class: "row" },
-        h("input", { type: "checkbox", checked: c.include, title: "Include in export", onchange: e => { edit(el, { include: e.target.checked }); renderReview(); } }),
-        h("input", { type: "text", value: c.name, "aria-label": "Name", onchange: e => edit(el, { name: e.target.value }) }),
-        ASSET_TYPES.includes(el.type) && h("select", { "aria-label": "Kind", onchange: e => { edit(el, { type: e.target.value }); renderReview(); } },
-          ASSET_TYPES.map(t => h("option", { value: t, selected: t === c.type }, t)))),
-      details(el),
+      h("div", { class: "row" }, h("input", { type: "text", value: e.name, "aria-label": "Name", onchange: ev => { S.edits[el.id] = { ...(S.edits[el.id] || {}), name: ev.target.value }; } }),
+        ASSET_TYPES.includes(el.type) && h("select", { "aria-label": "Kind", onchange: ev => { S.edits[el.id] = { ...(S.edits[el.id] || {}), type: ev.target.value }; S.tab = ev.target.value; render(); } }, ASSET_TYPES.map(t => h("option", { value: t, selected: t === e.type }, t)))),
+      out,
+      c.writable ? h("label", { class: "meta" }, "Decision ", h("select", { onchange: ev => { S.actions[el.id] = ev.target.value; render(); } },
+        (c.status === "changed" ? [["replace", "Replace what is on the board"], ["ignore", "Keep the board as it is"]] : c.status === "new" || !c.status ? [["add", "Add to the board"], ["ignore", "Ignore"]]
+          : [["ignore", "Leave it (already there)"], ["replace", "Write it again"]]).map(([v, t]) => h("option", { value: v, selected: v === a }, t)))) : null,
+      extra,
       h("div", { class: "chips" },
-        h("span", { class: "chip " + el.confidence }, el.confidence),
-        el.origin !== "specified" && h("span", { class: "chip" }, el.origin),
-        el.section && h("span", { class: "chip" }, el.section),
-        pages.slice(0, 3).map(p => h("button", { class: "chip", onclick: () => showPage(p) }, "p" + p)),
-        pages.length > 3 && h("span", { class: "chip" }, `+${pages.length - 3} pages`))));
-  return node;
+        c.status && h("span", { class: "chip " + c.status }, STATUS[c.status] + (c.status === "same-value" ? " " + c.target : "")),
+        h("span", { class: "chip " + el.confidence }, el.confidence), el.origin !== "specified" && h("span", { class: "chip" }, el.origin),
+        el.source_name && h("span", { class: "chip" }, el.source_name.length > 28 ? el.source_name.slice(0, 26) + "…" : el.source_name),
+        el.also_in && h("span", { class: "chip" }, `also in ${el.also_in.length} other source${el.also_in.length === 1 ? "" : "s"}`),
+        el.pdf && pages.slice(0, 2).map(p => h("button", { class: "chip", onclick: () => { $("pageCap").textContent = "Page " + p; $("pageImg").src = `/api/brands/${S.brand}/page/${el.pdf}/${p}.png`; $("pageDialog").showModal(); } }, "p" + p)))));
 }
 
-function showPage(n) {
-  $("pageCap").textContent = "Page " + n;
-  $("pageImg").src = `/api/jobs/${state.job.id}/page/${n}.png`;
-  $("pageDialog").showModal();
+// ------------------------------------------------------------------------------------- apply
+function apply() {
+  const d = S.data, p = d.plan;
+  if (!p) return h("div", { class: "panel" }, "Nothing is approved yet. Make your decisions in Review and press Approve.");
+  const done = p.steps.filter(s => s.result).length, failed = p.steps.filter(s => s.result && !s.result.ok);
+  const lines = s => { const det = s.result && s.result.detail; const log = det && (det.log || det.failed || []); return [
+    Array.isArray(log) && log.length ? h("ul", { class: "props" }, log.slice(0, 40).map(l => h("li", { class: /SKIPPED|MISSING|not found/.test(l) ? "bad" : "" }, l))) : null,
+    det && det.uploaded != null && h("div", { class: "meta" }, `${det.uploaded} of ${det.of} files sent`), typeof det === "string" && h("div", { class: "meta bad" }, det)]; };
+  return h("div", {},
+    h("h2", {}, "Write the approved changes to Figma"),
+    h("p", { class: "lede" }, "Claude Code carries these out through your Figma connection, one step at a time. Everything it adds is labelled as coming from Brief Scraper."),
+    done === 0 && h("div", { class: "notice" }, "Before you run this, save a restore point in Figma: File → Save to version history (⌥⌘S). The Figma connection cannot save one for you, and it is the only undo for a batch of changes."),
+    h("div", { class: "panel" }, h("div", {}, "In Claude Code, opened in the brief-scraper folder, run:"), cmd("/apply-brand"),
+      h("div", { class: "meta" }, done === p.steps.length ? "All steps have run." : done ? `${done} of ${p.steps.length} steps done. Run the command again to continue if it stopped.` : "This page updates as each step finishes.")),
+    p.skipped.length > 0 && h("div", { class: "notice" }, "Left out of the plan: " + p.skipped.join("; ")),
+    h("div", { class: "panel plan" }, h("h3", {}, "Plan"), h("ol", {}, p.steps.map(s => h("li", {}, s.title, " ",
+      s.result ? h("span", { class: s.result.ok ? "ok" : "bad" }, s.result.ok ? "· done " + s.result.at : "· failed") : h("span", { class: "meta" }, "· waiting"), lines(s))))),
+    done === p.steps.length && h("div", { class: "panel" }, h("h3", {}, failed.length ? "Finished with problems" : "Finished"),
+      h("div", {}, "In Figma, open the DesignOps plugin and press ", h("strong", {}, "Update & rescan"), " so the CMS picks up the changes."),
+      h("div", { class: "meta", style: { marginTop: "8px" } }, "To check the result here, scan the board again in step 2; items you wrote should now show as already on the board.")));
 }
 
-// ---- export for the DesignOps plugin's "design.md" reader -------------------------------------
-// Found by testing: it takes one logo (a short web address), five colour roles plus about eight
-// more colours, and three type slots. Anything beyond that is ignored or picked at random.
-const WEIGHTS = [[100, "Thin"], [200, "Extra Light"], [300, "Light"], [400, "Regular"], [500, "Medium"], [600, "Semi Bold"], [700, "Bold"], [800, "Heavy"], [900, "Black"]];
-const MAX_EXTRA = 8;
-function openPlugin() {
-  const on = t => state.els.filter(e => cur(e).type === t && cur(e).include);
-  const colours = on("color").filter(e => e.hex), logos = on("logo").filter(e => e.asset);
-  const families = on("font-family").map(e => cur(e).name);
-  const styles = state.els.filter(e => e.type === "text-style" && e.family && e.size);
-  const big = [...styles].sort((a, b) => b.size - a.size), busy = [...styles].sort((a, b) => (b.chars || 0) - (a.chars || 0));
-  const lum = e => { const [r, g, b] = e.rgb || [0, 0, 0]; return 0.299 * r + 0.587 * g + 0.114 * b; };
-  const byLum = [...colours].sort((a, b) => lum(a) - lum(b));
-  const guess = { primary: colours[0], secondary: colours[1], tertiary: colours[2], text: byLum[0], background: byLum[byLum.length - 1] };
-  const slot = s => s ? { family: s.family, weight: s.weight || 400, size: s.size } : { family: families[0] || "", weight: 400, size: 16 };
-  const type = { display: slot(big[0]), headline: slot(big.find(s => s.size < (big[0] || {}).size) || big[0]), body: slot(busy[0]) };
-  const name = h("input", { type: "text", value: state.job.name.replace(/\.pdf$/i, "") });
-  const url = h("input", { type: "text", placeholder: "https://… direct link to the logo file" });
-  const logoPick = h("select", {}, logos.map(e => h("option", { value: e.id }, cur(e).name + " (" + e.asset.format + ")")));
-  const dl = h("a", { class: "btn", href: "#" }, "Download logo file");
-  const setDl = () => { const e = logos.find(l => l.id === logoPick.value); if (e) dl.href = `/api/jobs/${state.job.id}/asset/${encodeURIComponent(e.id)}?download=${encodeURIComponent(cur(e).name)}`; };
-  logoPick.onchange = setDl; setDl();
-  const roleSel = {};
-  const roles = ["primary", "secondary", "tertiary", "text", "background"].map(r => {
-    roleSel[r] = h("select", {}, colours.map(e => h("option", { value: e.id, selected: guess[r] && guess[r].id === e.id }, `${cur(e).name}  ${e.hex}`)));
-    return [h("label", {}, r[0].toUpperCase() + r.slice(1)), roleSel[r]];
-  });
-  const note = h("div", { class: "meta" });
-  const boxes = colours.map((e, i) => { const b = h("input", { type: "checkbox", value: e.id, checked: true, onchange: count }); return h("label", {}, b, h("span", { class: "dot", style: { background: e.hex } }), cur(e).name); });
-  function count() { const n = boxes.filter(b => b.firstChild.checked).length; note.textContent = `${n} chosen. The brand page carried all 12 in testing; the design.md route keeps about ${MAX_EXTRA}.`; }
-  const typeIn = {};
-  const typeRows = [["display", "Display"], ["headline", "Heading"], ["body", "Body"]].map(([k, label]) => {
-    const fam = h("input", { type: "text", value: type[k].family, list: "famList" });
-    const w = h("select", {}, WEIGHTS.map(([n, t]) => h("option", { value: n, selected: n === type[k].weight }, `${t} ${n}`)));
-    const sz = h("input", { type: "number", value: type[k].size, min: 1 });
-    typeIn[k] = { fam, w, sz };
-    return [h("label", {}, label), h("div", { class: "trio" }, fam, w, sz)];
-  });
-  const slugOf = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "colour";
-  function build() {
-    const el = id => colours.find(c => c.id === id);
-    const L = ["---", "version: alpha", `name: ${JSON.stringify(name.value.trim() || "Brand")}`];
-    if (url.value.trim()) L.push(`logo: ${url.value.trim()}`);
-    L.push("colors:");
-    for (const r of Object.keys(roleSel)) { const c = el(roleSel[r].value); if (c) L.push(`  ${r}: "${c.hex}"`); }
-    const extra = boxes.filter(b => b.firstChild.checked).map(b => el(b.firstChild.value));
-    const used = new Set(Object.keys(roleSel));
-    for (const c of extra) { let k = slugOf(cur(c).name); while (used.has(k)) k += "-2"; used.add(k); L.push(`  ${k}: "${c.hex}"`); }
-    L.push("typography:");
-    for (const [k, t] of Object.entries(typeIn)) L.push(`  ${k}:`, `    fontFamily: ${t.fam.value.trim()}`, `    fontSize: ${t.sz.value}px`, `    fontWeight: ${t.w.value}`, "    lineHeight: 1.2");
-    L.push("---", "", `# ${name.value.trim() || "Brand"}`, "", "## Colors", "", "| Name | HEX |", "|---|---|");
-    for (const c of extra) L.push(`| ${cur(c).name} | ${c.hex} |`);
-    L.push("", "## Typography", "");
-    for (const [k, t] of Object.entries(typeIn)) L.push(`- ${k[0].toUpperCase() + k.slice(1)}: ${t.fam.value.trim()}, ${(WEIGHTS.find(w => w[0] == t.w.value) || [0, "Regular"])[1]}, ${t.sz.value}px`);
-    return L.join("\n") + "\n";
-  }
-  const pick = id => { const c = colours.find(x => x.id === id); return c ? { name: cur(c).name, hex: c.hex } : null; };
-  const config = () => ({
-    name: name.value.trim(), logo_id: logoPick.value || null,
-    roles: Object.fromEntries(Object.entries(roleSel).map(([k, sel]) => [k, pick(sel.value)]).filter(([, v]) => v)),
-    colors: boxes.filter(b => b.firstChild.checked).map(b => pick(b.firstChild.value)),
-    type: Object.fromEntries(Object.entries(typeIn).map(([k, t]) => [k, { family: t.fam.value.trim(), weight: +t.w.value, size: +t.sz.value }])),
-  });
-  const siteBox = h("div", { class: "meta" });
-  const post = async (path, body) => { const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); return r.json(); };
-  function showSite(local, pub, err) {
-    const link = u => h("a", { href: u, target: "_blank", rel: "noopener" }, u);
-    siteBox.replaceChildren(
-      err && h("div", { style: { color: "var(--warn)" } }, err),
-      local && h("div", {}, "Preview on this Mac: ", link(local)),
-      local && (pub
-        ? h("div", {}, h("strong", {}, "Online now: "), link(pub), h("div", {}, "Paste this address into the plugin's Website URL tab. Anyone with it can see the page until you take it offline. "),
-            h("button", { class: "btn", onclick: async () => { await post("/api/tunnel/stop"); showSite(local, null); } }, "Take offline"))
-        : h("div", {}, h("button", { class: "btn", onclick: async e => { e.target.disabled = true; e.target.textContent = "Starting…"; const r = await post("/api/tunnel/start"); showSite(local, r.public_url, r.error); } }, "Put online temporarily"),
-            " Opens a temporary public address through Cloudflare so the plugin can read the page.")));
-  }
-  const makeSite = async () => { const r = await post(`/api/jobs/${state.job.id}/site`, config()); showSite(r.local_url, r.public_url); };
-  const save = () => {
-    const a = h("a", { href: URL.createObjectURL(new Blob([build()], { type: "text/markdown" })), download: slugOf(name.value || "brand") + ".design.md" });
-    document.body.append(a); a.click(); a.remove();
-  };
-  $("pluginBody").replaceChildren(
-    h("h2", {}, "Export for the DesignOps plugin"),
-    h("div", { class: "meta" }, "Builds a small brand page for the plugin's Website URL scraper, which takes one logo, the colour roles, every labelled colour and three type styles. A design.md is also available; that route keeps only about eight colours and needs the logo hosted separately."),
-    h("div", { class: "f" }, h("label", {}, "Brand name"), name),
-    h("h3", {}, "Logo"),
-    h("div", { class: "meta" }, "The brand page carries the chosen logo itself. The link field is only for the design.md route."),
-    h("div", { class: "f" }, h("label", {}, "Logo to use"), h("div", { style: { display: "flex", gap: "8px" } }, logoPick, dl), h("label", {}, "Logo link"), url),
-    h("h3", {}, "Colour roles"), h("div", { class: "f" }, roles.flat()),
-    h("h3", {}, "Other colours"), h("div", { class: "picks" }, boxes), note,
-    h("h3", {}, "Type styles (family, weight, size in px)"), h("div", { class: "f" }, typeRows.flat()),
-    h("datalist", { id: "famList" }, families.map(f => h("option", { value: f }))),
-    h("div", { class: "end" }, h("button", { class: "btn", onclick: () => $("pluginDialog").close() }, "Close"), h("button", { class: "btn", onclick: save }, "Download design.md"), h("button", { class: "btn primary", onclick: makeSite }, "Build brand page")),
-    siteBox);
-  count();
-  $("pluginDialog").showModal();
-}
-$("plugin").onclick = openPlugin;
 $("pageClose").onclick = () => $("pageDialog").close();
-$("again").onclick = () => renderStart();
-$("export").onclick = async () => {
-  $("export").disabled = true;
-  try {
-    const res = await fetch(`/api/jobs/${state.job.id}/export`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ edits: state.edits, asset_mode: $("assetMode").value }) });
-    const blob = await res.blob();
-    const name = (res.headers.get("Content-Disposition") || "").match(/filename="(.+?)"/);
-    const a = h("a", { href: URL.createObjectURL(blob), download: name ? name[1] : "brief.dsbrief.zip" });
-    document.body.append(a); a.click(); a.remove();
-  } finally { $("export").disabled = false; }
-};
-init();
+$("home").onclick = home;
+home();
 </script>
 </body>
 </html>

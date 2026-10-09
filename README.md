@@ -1,64 +1,68 @@
 # Brief Scraper
 
-Reads a client brand book PDF and turns it into one Markdown file (`*.dsbrief.md`) that the Figma
-plugin's Design System Scraper can ingest: one tagged block per element.
+Breaks a client's brand materials down into individual colours, gradients, type styles, logos, icons and
+images, compares them with what is already in the brand's Figma design-system file, and writes the changes
+you approve straight to that file.
 
-## Run
+It has two halves that run side by side on your Mac:
+
+- **The app** (this repo, in your browser): brands, materials, the review, the plan.
+- **Claude Code with the Figma connector**: reads the Figma file and writes to it, using your own Figma login.
+
+## Set up (once)
+
+1. Clone this repo and open the folder in Claude Code. The Figma connector must be connected in Claude Code.
+2. Optional but recommended: create a file named `.env` in this folder containing `ANTHROPIC_API_KEY=...`.
+   Without it, exact values are still read from PDFs, but naming, components, websites, text files and ads are not.
+3. Start the app:
 
 ```bash
 ./run.sh
 ```
 
-Then open http://127.0.0.1:8765, drop in a PDF, review, and press **Export**. The plugin only accepts `.md` files under 1 MB, so a brief with images downloads as a `.zip` of numbered parts; unzip it and give the plugin every part.
+Then open http://127.0.0.1:8765.
 
-To enable the optional AI pass, put `ANTHROPIC_API_KEY=...` in a `.env` file in this folder and restart.
-With it on, each page image and its text are sent to the Claude API. With it off, nothing leaves the machine.
+## A session
 
-## What is read, and how
+1. **Brand.** Add a brand (a name and its Figma file link) or open an existing one.
+2. **Materials.** Drop in brand PDFs, asset folders, images, SVGs, text or `.md` files, or give a website address.
+   Tick "ads or layouts" for finished work that should only be read as evidence.
+3. **Figma board.** In Claude Code, run `/scan-brand`. It reads the file and changes nothing.
+4. **Review.** Each new item shows how it relates to the board: new, differs, or already there. Decide what to
+   add, replace or ignore, set the colour roles, choose where logos and text styles go, then press Approve.
+5. **Apply.** Save a version in Figma first (File → Save to version history); the Figma connection cannot do
+   that for you. Then, in Claude Code, run `/apply-brand`. It writes the approved changes. Everything it adds is labelled "Brief Scraper" in the item's description.
+6. In Figma, press **Update & rescan** in the DesignOps plugin.
+
+Nothing a client supplies is stored. `brands.json` holds only names and Figma links; materials stay in memory
+and a temp folder until the app stops. The Figma file is the record, which is why every session starts with a scan.
+
+## What gets written, and where
+
+| Item | In the Figma file |
+|---|---|
+| Colours | A variable in the `Color` collection plus a `Brand/<Name>` colour style bound to it |
+| Colour roles | The `primary`, `secondary`, `tertiary`, `text` and `background` colour variables |
+| Gradients | `Gradient/<Name>` colour styles |
+| Text styles | An existing text style you choose, or a new one. Skipped if the font is not installed in Figma |
+| Icons | Components named `Brand/Icon <Name>` in a "Brand Icons" section on the Icons page |
+| Images | Image cards in an "Image Library" section on the Visuals page |
+| Logos | A chosen variant of an existing logo component set, or a component in a "Brand Logos" section |
+
+Components, guidelines, fonts, effects and spacing are shown for reference and are not written.
+
+The layout of the Figma file is found by pattern on each run (the page whose name contains "Icons", an existing
+item to copy), never by fixed positions, so it follows changes to the DesignOps template where it can and says so
+where it cannot.
+
+## How exact values are read from a PDF
 
 | Element | Source | Confidence |
 |---|---|---|
-| Colours | Text labels (name, HEX, RGB, CMYK, Pantone), cross-checked against the swatch fill behind the label | exact |
-| Gradients | The PDF's shading objects: stops, angle, and handle positions relative to the filled shape | exact (approximate if defined in CMYK) |
-| Font families | Embedded fonts, with every weight present | exact |
-| Text styles | Font, size, leading and colour of text as set in the brief itself (excluded by default) | exact, but observed rather than specified |
-| Icons, logos, graphics | Vector paths grouped by proximity and written as SVG | exact |
-| Images, raster logos | Embedded images, with transparency, as PNG or JPEG | exact, at the embedded resolution |
-| Components, type roles, effects, guidelines | AI pass only | stated or estimated |
+| Colours | Text labels (name, HEX, RGB, CMYK, Pantone), checked against the swatch behind the label | exact |
+| Gradients | The PDF's own gradient definitions: stops and angle | exact (approximate if defined in CMYK) |
+| Fonts | Embedded fonts with every weight present | exact |
+| Icons, logos | Vector paths grouped by proximity, written as SVG | exact |
+| Images, raster logos | Embedded images with transparency | exact, at the embedded resolution |
 
-A scanned PDF has none of this data. The app warns when a file looks scanned; only the AI pass can read those.
-
-## File format: `dsbrief/1`
-
-- Front matter: `schema`, `bundle`, `part`, `parts`, `part_kind` (`data` or `assets`), `source_file`, `generated`, `pages`, `elements`, `counts`.
-- Data parts come first and hold every element, with SVG artwork inline. Raster images follow in asset parts; an element's `asset.part` names the part holding its file. Parts of one export share a `bundle` value, so the plugin can check it has all `parts` before ingesting.
-- Each element is a level-3 heading followed by a fenced block whose info string is `json element`.
-- An element with an `asset` is followed by a fenced block tagged `asset=<element id>`:
-  `svg` holds markup; `base64` holds an encoded image and also carries `mime=<type>`.
-
-Common fields: `id`, `type`, `name`, `cms` (which CMS tabs it feeds), `origin`
-(`specified`, `observed`, `interpreted`), `confidence` (`exact`, `approximate`, `stated`, `estimated`),
-`section` (the page heading it came from), `source.pages`, `source.method`.
-
-Types: `color`, `gradient`, `font-family`, `text-style`, `effect`, `spacing`, `radius`, `motion`,
-`logo`, `icon`, `image`, `graphic`, `component`, `guideline`.
-
-Gradient `handles` are the start and end points as fractions of the filled shape's box, so a Figma
-`gradientTransform` can be built without re-deriving the angle. `stops[].color` names the palette
-colour a stop matches.
-
-### Reading it in the plugin
-
-```js
-// pass the text of every part, in any order
-function parseBrief(parts) {
-  const md = parts.join("\n");
-  const assets = {};
-  for (const m of md.matchAll(/^```(svg|base64) asset=(\S+)(?: mime=(\S+))?\n([\s\S]*?)\n```/gm)) {
-    assets[m[2]] = { format: m[1], mime: m[3] || "image/svg+xml", data: m[1] === "base64" ? m[4].replace(/\s+/g, "") : m[4] };
-  }
-  const elements = [...md.matchAll(/^```json element\n([\s\S]*?)\n```/gm)].map(m => JSON.parse(m[1]));
-  for (const el of elements) if (el.asset) el.asset.data = assets[el.asset.ref]?.data;
-  return elements;
-}
-```
+A scanned PDF has none of this; the app warns, and only the Claude pass can read those.

@@ -241,3 +241,78 @@ def enrich(path, result, add_element, progress=lambda done, total, msg: None, wo
     if fatal:
         raise RuntimeError(fatal)
     return problems
+
+
+# ---------------------------------------------------------------- other kinds of material
+
+TEXT_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["colors", "gradients", "text_styles", "guidelines"],
+    "properties": {
+        "colors": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["name", "hex"],
+                                               "properties": {"name": {"type": "string"}, "hex": {"type": "string"}}}},
+        "gradients": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False, "required": ["name", "angle", "stops"],
+            "properties": {"name": {"type": "string"}, "angle": {"type": "number"},
+                           "stops": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["position", "hex"],
+                                                                 "properties": {"position": {"type": "number"}, "hex": {"type": "string"}}}}}}},
+        "text_styles": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False, "required": ["name", "family", "weight", "size_px", "italic"],
+            "properties": {"name": {"type": "string"}, "family": {"type": "string"}, "weight": {"type": "integer"},
+                           "size_px": {"type": "number"}, "italic": {"type": "boolean"}}}},
+        "guidelines": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+TEXT_SYSTEM = """You extract brand design-system values from text a client supplied: a design.md or tokens file, \
+notes, or the text and CSS of a website. Return only what the text states.
+
+colors: each named brand colour with its hex as #RRGGBB. Use the name the text gives; for a CSS variable, turn \
+the variable name into a readable name. Leave out greys used only for borders or shadows on a website, and leave \
+out pure white and black unless the text presents them as brand colours.
+gradients: each gradient with its CSS angle in degrees (90 is left to right) and its stops, position from 0 to 1.
+text_styles: each type role that has a font family and a fixed size in pixels. Weight is 100 to 900. Skip roles \
+whose size is not stated as a fixed number.
+guidelines: short usage rules worth keeping.
+
+Do not invent values. Return empty arrays for anything the text does not contain."""
+
+IMAGE_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["colors", "fonts", "summary"],
+    "properties": {
+        "colors": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["name", "hex"],
+                                               "properties": {"name": {"type": "string"}, "hex": {"type": "string"}}}},
+        "fonts": {"type": "array", "items": {"type": "string"}},
+        "summary": {"type": "string"},
+    },
+}
+
+IMAGE_SYSTEM = """You are shown a finished piece of brand work such as an ad or a layout. It is evidence of how \
+the brand is used, not a specification. List the main brand colours you see, at most six, each with a short \
+descriptive name and your best estimate of its hex as #RRGGBB. Ignore colours that belong to photography. In \
+fonts, describe the typefaces in plain terms (for example "rounded geometric sans, bold, uppercase headline"); \
+name a typeface only if you can identify it confidently. In summary, say in one sentence what the piece is."""
+
+
+def _structured(system, content, schema, effort="low"):
+    client = anthropic.Anthropic(max_retries=4)
+    response = client.messages.create(
+        model=MODEL, max_tokens=16000, system=system,
+        output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
+        extra_headers={"anthropic-beta": "server-side-fallback-2026-07-01"}, extra_body={"fallbacks": "default"},
+        messages=[{"role": "user", "content": content}],
+    )
+    if response.stop_reason in ("refusal", "max_tokens"):
+        raise RuntimeError("the model declined this material" if response.stop_reason == "refusal" else "the response was cut off")
+    return json.loads(next(b.text for b in response.content if b.type == "text"))
+
+
+def read_text(text, label):
+    """Colours, gradients, type roles and rules stated in a text source."""
+    return _structured(TEXT_SYSTEM, [{"type": "text", "text": f"Source: {label}\n\n{text[:180_000]}"}], TEXT_SCHEMA)
+
+
+def read_reference_image(data, mime):
+    """Estimated colours and type from an ad or layout. Everything it returns is an estimate."""
+    return _structured(IMAGE_SYSTEM, [
+        {"type": "image", "source": {"type": "base64", "media_type": mime, "data": base64.standard_b64encode(data).decode()}},
+        {"type": "text", "text": "Describe the brand colours and type in this piece."}], IMAGE_SCHEMA)
