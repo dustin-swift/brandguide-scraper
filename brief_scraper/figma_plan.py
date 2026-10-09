@@ -921,8 +921,19 @@ def build_plan(brand, elements, compared, review, state):
     notes = [dict(c, stamp=_stamp(src(e))) for e in chosen if e["type"] == "guideline" for c in [guideline_card(e)] if c]
     if notes:
         gp = _guidelines_page(core)
-        steps.append({"id": "guidelines", "kind": "script", "code": guidelines_script(gp["id"] if gp else None, notes),
-                      "title": f"Write {len(notes)} guideline{'s' if len(notes) != 1 else ''} to the Guidelines page" + ("" if gp else " (new page)")})
+        # the Figma connector takes at most 50,000 characters of code per call, so long sets go in several steps
+        batches, size = [[]], 0
+        for c in notes:
+            n = len(json.dumps(c, ensure_ascii=False))
+            if batches[-1] and size + n > 30000:
+                batches.append([])
+                size = 0
+            batches[-1].append(c)
+            size += n
+        for i, part in enumerate(batches):
+            steps.append({"id": "guidelines" + (str(i + 1) if len(batches) > 1 else ""), "kind": "script", "code": guidelines_script(gp["id"] if gp else None, part),
+                          "title": f"Write {len(part)} guideline{'s' if len(part) != 1 else ''} to the Guidelines page"
+                                   + (f" (part {i + 1} of {len(batches)})" if len(batches) > 1 else "") + ("" if gp or i else " (new page)")})
     # rules that name one style or one kind of component also go in its description
     style_notes, set_notes = usage_notes([e for e in chosen if e["type"] == "guideline"], elements)
     if style_notes:
@@ -949,4 +960,7 @@ def build_plan(brand, elements, compared, review, state):
                               "title": f"Remove the template's placeholder {kind}"})
             else:
                 skipped.append(f"placeholder {kind}: no matching page found")
+    for st in steps:
+        if st["kind"] == "script" and len(st["code"]) > 49000:
+            skipped.append(f"\"{st['title']}\" is too long for one Figma call ({len(st['code'])} characters) and will fail; write fewer items at a time")
     return {"steps": steps, "skipped": skipped}
