@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "brief-scraper",
+      "runtimeExecutable": "/Users/dustinrowley/brief-scraper/.venv/bin/python",
+      "runtimeArgs": ["-m", "brief_scraper.server"],
+      "port": 8765
+    }
+  ]
+}

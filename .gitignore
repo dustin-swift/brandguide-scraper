@@ -1,0 +1,8 @@
+.venv/
+.env
+__pycache__/
+*.dsbrief.md
+.DS_Store
+brands.json
+probes/*.md
+probes/abrysvo-icons.json
