@@ -14,7 +14,10 @@ It has two halves that run side by side on your Mac:
 1. Clone this repo and open the folder in Claude Code. The Figma connector must be connected in Claude Code.
 2. Optional but recommended: create a file named `.env` in this folder containing `ANTHROPIC_API_KEY=...`.
    Without it, exact values are still read from PDFs, but naming, components, websites, text files and ads are not.
-3. Start the app:
+3. Run `./setup.sh` once. It gives Claude Code its own sign-in and Figma connection on this Mac, which is what
+   lets the app's **Scan** and **Write to Figma** buttons work. (Without it you can still type `/scan-brand` and
+   `/apply-brand` in Claude Code yourself.)
+4. Start the app:
 
 ```bash
 ./run.sh
@@ -27,11 +30,11 @@ Then open http://127.0.0.1:8765.
 1. **Brand.** Add a brand (a name and its Figma file link) or open an existing one.
 2. **Materials.** Drop in brand PDFs, asset folders, images, SVGs, text or `.md` files, or give a website address.
    Tick "ads or layouts" for finished work that should only be read as evidence.
-3. **Figma board.** In Claude Code, run `/scan-brand`. It reads the file and changes nothing.
+3. **Figma board.** Press **Scan the Figma board**. It reads the file and changes nothing.
 4. **Review.** Each new item shows how it relates to the board: new, differs, or already there. Decide what to
    add, replace or ignore, set the colour roles, choose where logos and text styles go, then press Approve.
 5. **Apply.** Save a version in Figma first (File → Save to version history); the Figma connection cannot do
-   that for you. Then, in Claude Code, run `/apply-brand`. It writes the approved changes. Everything it adds is labelled "Brief Scraper" in the item's description.
+   that for you. Then press **Write to Figma**. It writes the approved changes. Everything it adds is labelled "Brief Scraper" in the item's description.
 6. In Figma, press **Update & rescan** in the DesignOps plugin.
 
 Nothing a client supplies is stored. `brands.json` holds only names and Figma links; materials stay in memory

@@ -139,7 +139,7 @@ async function open(id) {
 async function refresh(force) {
   if (!S.brand) return;
   const d = await api("/api/brands/" + S.brand);
-  const stamp = JSON.stringify([d.sources.map(s => [s.id, s.state, s.message, s.count]), d.scanned_at, d.scan_running, d.plan && d.plan.steps.map(s => s.result && s.result.at), d.elements.length]);
+  const stamp = JSON.stringify([d.sources.map(s => [s.id, s.state, s.message, s.count]), d.scanned_at, d.scan_running, d.plan && d.plan.steps.map(s => s.result && s.result.at), d.elements.length, d.runner && [d.runner.state, d.runner.problem, (d.runner.log || []).length]]);
   const busy = document.activeElement && ["INPUT", "SELECT"].includes(document.activeElement.tagName);
   if (!force && (stamp === S.stamp || busy)) return;
   S.data = d; S.stamp = stamp; $("crumb").textContent = d.brand.name;
@@ -199,6 +199,22 @@ function materials() {
     d.elements.length > 0 && h("button", { class: "btn primary", onclick: () => { S.step = d.scanned_at ? "review" : "board"; render(); } }, d.scanned_at ? "Review against the board" : "Next: scan the Figma board"));
 }
 
+// A button that has Claude Code do the work in the background, with the typed command as a fallback.
+function runBox(kind, label, command, disabled) {
+  const r = S.data.runner || {}, mine = r.kind === kind, running = mine && r.state === "running";
+  const go = async () => { const out = await post(`/api/brands/${S.brand}/run/${kind}`); if (out.error) alert(out.error); refresh(true); };
+  return h("div", {},
+    h("div", { class: "rowline" },
+      h("button", { class: "btn primary", disabled: disabled || running || !r.available, onclick: go }, running ? "Working…" : label),
+      running && h("button", { class: "btn", onclick: async () => { await post(`/api/brands/${S.brand}/run/stop`); refresh(true); } }, "Stop"),
+      running && h("span", { class: "meta" }, `Claude Code started at ${r.started}. This usually takes a minute or two.`)),
+    !r.available && h("div", { class: "notice", style: { marginTop: "10px" } }, r.hint),
+    mine && r.problem && h("div", { class: "notice", style: { marginTop: "10px" } }, r.problem),
+    mine && r.log && r.log.length > 0 && (running || r.problem) && h("ul", { class: "props", style: { marginTop: "8px" } }, r.log.slice(-6).map(l => h("li", { class: "meta" }, l))),
+    h("details", { style: { marginTop: "12px" } }, h("summary", { class: "meta" }, "Or run it yourself in Claude Code"),
+      h("div", { class: "meta", style: { marginTop: "6px" } }, "With this folder open in Claude Code, run:"), cmd(command)));
+}
+
 // ------------------------------------------------------------------------------------- board
 function board() {
   const d = S.data, b = d.board;
@@ -206,8 +222,8 @@ function board() {
     h("h2", {}, "The Figma board as it is now"),
     h("p", { class: "lede" }, "Every session starts from a fresh scan, because the board is the record and can change between sessions. The scan only reads; it changes nothing."),
     h("div", { class: "panel" }, h("h3", {}, d.scanned_at ? "Scan again any time" : "Scan the board"),
-      h("div", {}, "In Claude Code, opened in the brief-scraper folder, run:"), cmd("/scan-brand"),
-      h("div", { class: "meta" }, d.scan_running ? "Scan in progress…" : d.scanned_at ? `Last scanned ${d.scanned_at}. This page updates by itself when a scan finishes.` : "Claude reads the file through your Figma connection and sends the result here. This page updates by itself."),
+      runBox("scan", d.scanned_at ? "Scan the Figma board again" : "Scan the Figma board", "/scan-brand"),
+      h("div", { class: "meta", style: { marginTop: "10px" } }, d.scan_running ? "Scan in progress…" : d.scanned_at ? `Last scanned ${d.scanned_at}.` : "Claude Code reads the file through its Figma connection and sends the result here."),
       h("div", { class: "meta" }, h("a", { href: d.brand.figma_url, target: "_blank", rel: "noopener" }, "Open the Figma file"))),
     b && h("div", { class: "panel" }, h("h3", {}, b.file || "Figma file"),
       h("div", { class: "stat" }, [["Colours", b.colours], ["Gradients", b.gradients], ["Text styles", b.text_styles], ["Icons", b.icons], ["Images", b.visuals], ["Logo sets", b.logo_sets.length]].map(([k, v]) => h("div", {}, h("b", {}, v), k))),
@@ -308,8 +324,8 @@ function apply() {
     h("h2", {}, "Write the approved changes to Figma"),
     h("p", { class: "lede" }, "Claude Code carries these out through your Figma connection, one step at a time. Everything it adds is labelled as coming from Brief Scraper."),
     done === 0 && h("div", { class: "notice" }, "Before you run this, save a restore point in Figma: File → Save to version history (⌥⌘S). The Figma connection cannot save one for you, and it is the only undo for a batch of changes."),
-    h("div", { class: "panel" }, h("div", {}, "In Claude Code, opened in the brief-scraper folder, run:"), cmd("/apply-brand"),
-      h("div", { class: "meta" }, done === p.steps.length ? "All steps have run." : done ? `${done} of ${p.steps.length} steps done. Run the command again to continue if it stopped.` : "This page updates as each step finishes.")),
+    h("div", { class: "panel" }, runBox("apply", done ? "Continue writing to Figma" : "Write to Figma", "/apply-brand", done === p.steps.length),
+      h("div", { class: "meta", style: { marginTop: "10px" } }, done === p.steps.length ? "All steps have run." : done ? `${done} of ${p.steps.length} steps done. Press the button again to continue if it stopped.` : "This page updates as each step finishes.")),
     p.skipped.length > 0 && h("div", { class: "notice" }, "Left out of the plan: " + p.skipped.join("; ")),
     h("div", { class: "panel plan" }, h("h3", {}, "Plan"), h("ol", {}, p.steps.map(s => h("li", {}, s.title, " ",
       s.result ? h("span", { class: s.result.ok ? "ok" : "bad" }, s.result.ok ? "· done " + s.result.at : "· failed") : h("span", { class: "meta" }, "· waiting"), lines(s))))),

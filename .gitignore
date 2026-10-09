@@ -6,3 +6,4 @@ __pycache__/
 brands.json
 probes/*.md
 probes/abrysvo-icons.json
+.tmp/

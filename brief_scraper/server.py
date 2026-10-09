@@ -18,7 +18,7 @@ from pathlib import Path
 import pymupdf
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
-from . import ai, figma_plan, sources
+from . import ai, figma_plan, runner, sources
 from .extract import slug
 
 ROOT = Path(__file__).resolve().parent
@@ -230,7 +230,7 @@ def brand_state(brand_id):
         "brand": b, "sources": s["sources"], "elements": s["elements"],
         "compared": figma_plan.compare(s["elements"], state) if state else {},
         "board": figma_plan.board_summary(state) if state else None,
-        "scanned_at": s["figma"]["scanned_at"], "scan_running": bool(s["figma"]["expected"]),
+        "scanned_at": s["figma"]["scanned_at"], "scan_running": bool(s["figma"]["expected"]), "runner": runner.status(brand_id),
         "plan": plan and {"skipped": plan["skipped"], "steps": [
             {"id": st["id"], "title": st["title"], "kind": st["kind"], "result": s["results"].get(st["id"])} for st in plan["steps"]]},
     })
@@ -285,6 +285,24 @@ def approve(brand_id):
 
 
 # ------------------------------------------------------------- the hand-off to Claude Code
+
+@app.post("/api/brands/<brand_id>/run/<kind>")
+def run(brand_id, kind):
+    b = brand_or_404(brand_id)
+    if kind == "stop":
+        runner.stop(brand_id)
+        return jsonify({"ok": True})
+    if kind not in ("scan", "apply"):
+        abort(404)
+    if kind == "apply" and not session(brand_id)["plan"]:
+        return jsonify({"error": "Nothing is approved yet."}), 409
+    ACTIVE["id"] = brand_id
+    try:
+        runner.start(brand_id, b["name"], kind, int(os.environ.get("PORT", "8765")))
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"ok": True})
+
 
 def _target():
     want = (request.args.get("brand") or "").strip().lower()
