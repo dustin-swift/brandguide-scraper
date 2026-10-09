@@ -643,7 +643,7 @@ for (const it of ITEMS) {
     if (s.fill) attempt('fill', it.name, () => { surface.fills = [paintFor(s.fill)]; });
     if (s.stroke) attempt('border', it.name, () => { surface.strokes = [paintFor(s.stroke)]; surface.strokeWeight = s.strokeWeight || 1; });
     if (s.radius != null && 'cornerRadius' in surface) attempt('corner radius', it.name, () => { surface.cornerRadius = Math.min(s.radius, Math.min(surface.width, surface.height) / 2 > 0 && s.radius >= 999 ? 999 : s.radius); });
-  } else if (s.fill || s.radius != null || s.stroke) log.push('note: ' + it.name + ' has no surface layer to take a fill, border or radius');
+  }
   let font = null;
   if (s.fontFamily) { const fam = fonts.filter(f => f.fontName.family.toLowerCase() === s.fontFamily.toLowerCase());
     if (!fam.length) log.push('note: ' + it.name + ' keeps the template font because "' + s.fontFamily + '" is not installed in Figma');
@@ -656,7 +656,23 @@ for (const it of ITEMS) {
     if (font) attempt('font', it.name, () => { t.fontName = font; });
     if (s.textCase) attempt('text case', it.name, () => { t.textCase = s.textCase; });
   }
-  if (main) { if (s.fontSize) attempt('font size', it.name, () => { main.fontSize = s.fontSize; }); if (s.sample) attempt('sample text', it.name, () => { main.characters = s.sample; }); }
+  if (main) { if (s.fontSize) attempt('font size', it.name, () => { main.fontSize = s.fontSize; }); if (s.sample) attempt('sample text', it.name, () => { main.characters = s.sample.replace(/\\s+\\/\\s+/g, '\\n'); }); }
+  // Some masters (headers, for one) are text only. Where the brief gives a fill, or light text that would
+  // vanish on the specimen, a backing shape goes behind the text so the variant shows what the brief describes.
+  const lum = h => { const c = rgb(h); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+  const lightText = s.textColor && lum(s.textColor) > 0.8;
+  if (!surface && main && (s.fill || s.stroke || lightText)) {
+    let back = comp.children.find(k => k.name === 'Brand backing');
+    if (!back) { back = figma.createRectangle(); back.name = 'Brand backing'; comp.insertChild(0, back); }
+    const box = texts.filter(t => t.visible), x0 = Math.min(...box.map(t => t.x)), y0 = Math.min(...box.map(t => t.y));
+    const x1 = Math.max(...box.map(t => t.x + t.width)), y1 = Math.max(...box.map(t => t.y + t.height));
+    back.x = Math.max(0, x0 - 20); back.y = Math.max(0, y0 - 14); back.resize(Math.min(comp.width - back.x, x1 - x0 + 40), Math.min(comp.height - back.y, y1 - y0 + 28));
+    const fill = s.fill || (lightText ? it.backdrop : null);
+    back.fills = fill ? [paintFor(fill)] : [];
+    back.strokes = s.stroke ? [paintFor(s.stroke)] : []; if (s.stroke) back.strokeWeight = s.strokeWeight || 1;
+    back.cornerRadius = s.radius != null ? Math.min(s.radius, back.height / 2) : 0;
+    if (!s.fill && lightText) log.push('note: ' + it.name + ' has light text and no stated fill, so it is shown on ' + it.backdrop + ' to stay readable');
+  }
   const tag = comp.children.find(k => k.type === 'TEXT' && k.name === 'Variant label');
   if (tag) { await loadOwn(tag); tag.characters = it.name.toUpperCase(); }
 }
@@ -858,6 +874,8 @@ def build_plan(brand, elements, compared, review, state):
         else:
             skipped_early = "the Colours page: no page with that name was found, so only variables and styles were written"
     palette = [{"name": e["name"], "hex": e["hex"]} for e in elements if e["type"] == "color" and e.get("hex")]
+    _lum = lambda h: 0.2126 * int(h[1:3], 16) + 0.7152 * int(h[3:5], 16) + 0.0722 * int(h[5:7], 16)
+    backdrop = min((c["hex"].upper() for c in palette if re.fullmatch(r"#[0-9A-Fa-f]{6}", c["hex"])), key=_lum, default="#1A1A1A")
     for cat, pat in COMPONENT_PAGES.items():
         comps = [e for e in chosen if e["type"] == "component" and e.get("category") == cat and compared[e["id"]].get("spec")]
         page = next((pg for pg in core.get("pages", []) if re.search(rf"\b({pat})\b", pg["name"], re.I)), None)
@@ -866,7 +884,7 @@ def build_plan(brand, elements, compared, review, state):
             for e in comps:
                 spec = component_spec(e, palette)
                 name = re.sub(r"^\s*(buttons?|headers?|cards?|roundels?|disclaimers?|gradients?)\s*[/:]\s*", "", e["name"], flags=re.I).strip() or e["name"]
-                items.append({"name": name[:40], "spec": spec, "base": "pill" if spec.get("radius", 0) >= 999 else None,
+                items.append({"name": name[:40], "spec": spec, "backdrop": backdrop, "base": "pill" if spec.get("radius", 0) >= 999 else None,
                               "stamp": (_stamp(src(e)) + ((" · " + e["description"]) if e.get("description") else ""))[:280]})
             steps.append({"id": f"components-{cat}", "kind": "script", "code": components_script(page["id"], items),
                           "title": f"Add {len(items)} variant{'s' if len(items) != 1 else ''} to the {page['name'].lstrip('→ ').strip()} master component"})
