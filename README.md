@@ -60,6 +60,11 @@ spacing are shown for reference and are not written.
 
 Brand gradients are also shown as variants on the Gradients master component.
 
+Fonts: the board's Headline, Copy and Footnote font settings hold a font name, so Review lets you point each at a
+font family from the brief whether or not that font is installed in Figma yet. Text styles are different: Figma
+only accepts a font it has, so a style in a missing font is either skipped or written in a stand-in font and
+labelled with the font it should be.
+
 ### Clearing the template's placeholders
 
 A new DesignOps file arrives with dummy content: numbered icons with no artwork, image cards with no picture, and

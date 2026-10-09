@@ -242,6 +242,8 @@ def compare(elements, state):
             else:
                 info.update(spec=spec, target=comp_pages[cat].lstrip("→ ").strip(),
                             note="Added as a new variant of the master component, using only the values the brief states. The template's own variants are left as they are.")
+        elif t == "font-family":
+            info.update(writable=False, status="reference", note="Set as the board's Headline, Copy or Footnote font in the Brand fonts panel.")
         else:
             info.update(writable=False, status="reference", note="Kept for reference; not written to Figma.")
         if t in ("icon", "image", "graphic", "logo") and not el.get("asset"):
@@ -259,7 +261,7 @@ def board_summary(state):
             "logo_sets": [s["name"] for s in ((state or {}).get("logos") or {}).get("sets", [])],
             "pages_found": [k for k in PAGE_KINDS if (state or {}).get(k)],
             "roles": core.get("roles") or {v["n"]: v["hex"] for v in core.get("colorVars", []) if v["n"] in ROLES},
-            "paints": core.get("paints", []), "texts": core.get("texts", []),
+            "paints": core.get("paints", []), "texts": core.get("texts", []), "font_vars": core.get("fontVars") or {},
             "placeholders": {"icons": sum(sec.get("ph", 0) for sec in ((state or {}).get("icons") or {}).get("sections", [])),
                              "visuals": sum(sec.get("ph", 0) for sec in ((state or {}).get("visuals") or {}).get("sections", [])),
                              "gradients": len(core.get("placeholderGradients", []))},
@@ -342,6 +344,14 @@ for (const g of D.gradients) {
   const T = [[vx, vy, -(S[0] * vx + S[1] * vy)], [-vy, vx, -(S[0] * -vy + S[1] * vx) + 0.5]];
   s.paints = [{ type: g.kind === 'radial' ? 'GRADIENT_RADIAL' : 'GRADIENT_LINEAR', gradientTransform: g.kind === 'radial' ? [[1, 0, 0], [0, 1, 0]] : T,
     gradientStops: g.stops.map(([position, hex]) => ({ position, color: Object.assign(rgb(hex), { a: 1 }) })) }]; touched.push(s.id);
+}
+// The template's font variables hold a family name as text, so they can be set before the font is installed.
+for (const [name, family] of Object.entries(D.fonts || {})) {
+  const v = vars.find(x => x.name === name && x.resolvedType === 'STRING' && x.scopes.includes('FONT_FAMILY'));
+  if (!v) { log.push('SKIPPED font ' + name + ': no such font variable'); continue; }
+  const col = cols.find(c => c.id === v.variableCollectionId);
+  for (const m of col.modes) { const cur = v.valuesByMode[m.modeId]; if (!(cur && cur.type === 'VARIABLE_ALIAS')) v.setValueForMode(m.modeId, family); }
+  log.push('font ' + name + ' = ' + family);
 }
 if (D.text.length) {
   const fonts = await figma.listAvailableFontsAsync();
@@ -666,7 +676,8 @@ def build_plan(brand, elements, compared, review, state):
     chosen = [e for e in elements if actions.get(e["id"]) in ("add", "replace") and compared.get(e["id"], {}).get("writable")]
     src = lambda e: e.get("source_name", "")
     tokens = {"roles": {r: h for r, h in (review.get("roles") or {}).items() if r in ROLES and re.fullmatch(r"#[0-9A-Fa-f]{6}", h or "")},
-              "colors": [], "gradients": [], "text": []}
+              "colors": [], "gradients": [], "text": [],
+              "fonts": {k: v.strip()[:80] for k, v in (review.get("font_roles") or {}).items() if k in (core.get("fontVars") or {}) and (v or "").strip()}}
     for e in chosen:
         if e["type"] == "color":
             tokens["colors"].append({"variable": slug(e["name"]), "style": colour_style_name(e), "hex": e["hex"].upper(), "stamp": _stamp(src(e))})
@@ -684,8 +695,9 @@ def build_plan(brand, elements, compared, review, state):
     steps = []
     if any(tokens.values()):
         n = len(tokens["colors"]), len(tokens["gradients"]), len(tokens["text"]), len(tokens["roles"])
+        fonts_note = f", and set {len(tokens['fonts'])} font{'s' if len(tokens['fonts']) != 1 else ''}" if tokens["fonts"] else ""
         steps.append({"id": "tokens", "kind": "script", "code": tokens_script(tokens),
-                      "title": f"Write {n[0]} colours, {n[1]} gradients, {n[2]} text styles and {n[3]} colour roles"})
+                      "title": f"Write {n[0]} colours, {n[1]} gradients, {n[2]} text styles and {n[3]} colour roles" + fonts_note})
     colour_page = next((pg["id"] for pg in core.get("pages", []) if re.search(r"\bcolou?rs?\b", pg["name"], re.I)), None)
     if tokens["colors"] or tokens["roles"]:
         if colour_page:
