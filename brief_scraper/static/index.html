@@ -263,7 +263,7 @@ function card(el) {
   const c = cmp(el), e = cur(el), a = action(el), b = S.data.board, pages = (el.source && el.source.pages) || [];
   const code = t => h("code", {}, t), out = [];
   if (el.type === "color") out.push(h("div", { class: "meta" }, code(el.hex || ""), el.cmyk ? ["  CMYK ", code(el.cmyk.join(" "))] : null, c.status === "changed" ? ["  board has ", code(c.current)] : null));
-  if (el.type === "gradient") out.push(h("div", { class: "meta" }, el.kind === "radial" ? "radial" : `${el.angle}° linear`, " · ", el.stops.map(s => `${s.color || s.hex} ${Math.round(s.position * 100)}%`).join(" → ")));
+  if (el.type === "gradient") out.push(h("div", { class: "meta" }, el.kind === "radial" ? "radial" : `${el.angle}° linear`, " · ", (el.stops || []).map(s => `${s.color || s.hex} ${Math.round(s.position * 100)}%`).join(" → ")));
   if (el.type === "font-family") out.push(h("div", { class: "meta" }, (el.styles || []).map(s => s.style).join(", ")), h("div", { class: "meta" }, "Fonts must be installed in Figma by a person; this tool cannot add them."));
   if (el.type === "text-style") out.push(h("div", { class: "meta" }, c.spec ? `${c.spec.family} · weight ${c.spec.weight}${c.spec.italic ? " italic" : ""} · ${c.spec.size}px` : (el.family ? `${el.family} ${el.style || ""} ${el.size || ""}` : "")));
   if (ASSET_TYPES.includes(el.type)) out.push(h("div", { class: "meta" }, el.paths ? `Vector, ${el.paths} paths` : el.asset && el.asset.format === "svg" ? "Vector (SVG)" : el.pixel_size ? `Raster, ${el.pixel_size.join("×")} px` : ""));

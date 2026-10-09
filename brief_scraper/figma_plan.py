@@ -108,15 +108,19 @@ def text_spec(el):
     weight = el.get("weight")
     if weight is None:
         raw = (props.get("weight", "") + " " + props.get("font-weight", "") + " " + props.get("style", "")).lower().replace(" ", "")
-        weight = next((w for w, n in sorted(WEIGHT_NAMES.items(), key=lambda kv: -len(kv[1])) if n.lower().replace(" ", "") in raw), None)
+        words = dict({n.lower().replace(" ", ""): w for w, n in WEIGHT_NAMES.items()}, heavy=800, demibold=600, demi=600, book=400, ultralight=200, hairline=100)
+        word = next((k for k in sorted(words, key=len, reverse=True) if k in raw), None)
         m = re.search(r"\b([1-9]00)\b", raw)
-        weight = int(m.group(1)) if m else (weight or 400)
+        weight = int(m.group(1)) if m else words.get(word, 400)
+        if word in ("heavy", "book", "demi", "demibold"):
+            style_name = word.title().replace("Demibold", "DemiBold")
     italic = bool(el.get("italic")) or "italic" in json.dumps(props).lower()
+    style_name = locals().get("style_name")
     if not family or not size:
         return None
     family = re.split(r"[,;]", str(family))[0].strip().strip("\"'")
     return {"family": family, "weight": int(weight), "italic": italic, "size": float(size),
-            "line_height": el.get("line_height_percent")}
+            "line_height": el.get("line_height_percent"), "style_name": style_name}
 
 
 def compare(elements, state):
@@ -373,7 +377,7 @@ def build_plan(brand, elements, compared, review, state):
             spec = compared[e["id"]].get("spec")
             target = (review.get("text_targets") or {}).get(e["id"]) or e["name"]
             if spec:
-                style = WEIGHT_NAMES.get(spec["weight"], "Regular") + (" Italic" if spec["italic"] else "")
+                style = (spec.get("style_name") or WEIGHT_NAMES.get(spec["weight"], "Regular")) + (" Italic" if spec["italic"] else "")
                 tokens["text"].append({"style": target, "family": spec["family"], "fontStyle": style.replace("Regular Italic", "Italic"),
                                        "size": spec["size"], "lineHeight": spec["line_height"], "stamp": _stamp(src(e))})
     steps = []

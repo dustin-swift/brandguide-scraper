@@ -102,7 +102,7 @@ def _merge(s, src, elements, assets, pages=None):
             if el["type"] == "color":
                 key = ("color", slug(el["name"]), el.get("hex"))
             elif el["type"] == "gradient":
-                key = ("gradient", json.dumps([(round(x["position"], 2), x["hex"]) for x in el["stops"]]), el.get("angle"))
+                key = ("gradient", json.dumps([(round(x["position"], 2), x["hex"]) for x in el.get("stops") or []]) + slug(el["name"]) * (not el.get("stops")), el.get("angle"))
             elif asset:
                 key = ("asset", sources.fingerprint(asset))
             else:

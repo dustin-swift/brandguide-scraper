@@ -56,7 +56,29 @@ def from_pdf(path, use_ai, max_edge, progress):
             return el
 
         problems = ai.enrich(path, out, add, progress)
+    for el in out["elements"]:
+        _repair_gradient(el)
+    # an estimated gradient that only reuses the colours of one read exactly from the PDF is the same gradient
+    exact = [{x["hex"] for x in e["stops"]} for e in out["elements"] if e["type"] == "gradient" and e["source"]["method"] == "pdf-shading"]
+    out["elements"] = [e for e in out["elements"] if not (e["type"] == "gradient" and e["source"]["method"] != "pdf-shading"
+                                                          and any({x["hex"] for x in e["stops"]} <= known for known in exact))]
     return out["elements"], assets, out["pages"], problems
+
+
+def _repair_gradient(el):
+    """Claude describes gradients it sees in words. Turn that into stops, or keep it as a note."""
+    if el["type"] != "gradient" or el.get("stops"):
+        return
+    text = " ".join(str(v) for v in (el.get("properties") or {}).values()) + " " + el.get("description", "")
+    hexes = [h.upper() for h in re.findall(_HEX, text)]
+    if len(hexes) < 2:
+        el["type"], el["cms"] = "guideline", []
+        el.setdefault("rules", []).append("Gradient described in the brief without exact colour values.")
+        return
+    angle = re.search(r"(-?\d+(?:\.\d+)?)\s*(?:deg|°)", text)
+    el.update(kind="linear", angle=float(angle.group(1)) if angle else 90.0, confidence="estimated",
+              stops=[{"position": round(i / (len(hexes) - 1), 4), "hex": h} for i, h in enumerate(hexes)])
+    el["css"] = "linear-gradient(%gdeg, %s)" % (el["angle"], ", ".join(f"{s['hex']} {s['position'] * 100:g}%" for s in el["stops"]))
 
 
 def from_asset(rel_path, data):
