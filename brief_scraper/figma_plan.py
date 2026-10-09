@@ -34,13 +34,18 @@ const colorCol = cols.find(c => /^colou?rs?$/i.test(c.name));
 const roleCol = cols.find(c => vars.some(v => v.variableCollectionId === c.id && v.name === 'Primary'));
 const first = (v, col) => v.valuesByMode[col.defaultModeId];
 const colorVars = colorCol ? vars.filter(v => v.variableCollectionId === colorCol.id && v.resolvedType === 'COLOR').map(v => ({ n: v.name, hex: hx(first(v, colorCol)) })) : [];
+const resolve = v => { let val = first(v, roleCol), n = 0;
+  while (val && val.type === 'VARIABLE_ALIAS' && n++ < 6) { const t = byId[val.id]; if (!t) return null; const c = cols.find(x => x.id === t.variableCollectionId); val = t.valuesByMode[c.defaultModeId]; }
+  return val && typeof val === 'object' && 'r' in val ? hx(val) : null; };
+const RN = { 'Primary': 'primary', 'Secondary': 'secondary', 'Tertiary': 'tertiary', 'Text color': 'text', 'Background color': 'background' };
+const roles = roleCol ? Object.fromEntries(vars.filter(v => v.variableCollectionId === roleCol.id && RN[v.name]).map(v => [RN[v.name], resolve(v)])) : {};
 const fontVars = roleCol ? Object.fromEntries(vars.filter(v => v.variableCollectionId === roleCol.id && v.resolvedType === 'STRING' && v.scopes.includes('FONT_FAMILY')).map(v => [v.name, first(v, roleCol)])) : {};
 const paints = (await figma.getLocalPaintStylesAsync()).map(s => { const p = s.paints[0] || {}; const o = { n: s.name, d: (s.description || '').slice(0, 80) };
   if (p.type === 'SOLID') { o.hex = hx(p.color); const b = p.boundVariables && p.boundVariables.color; if (b && byId[b.id]) o.v = byId[b.id].name; }
   else if (p.gradientStops) o.g = p.gradientStops.map(g => [Math.round(g.position * 1000) / 1000, hx(g.color), Math.round(g.color.a * 100) / 100]);
   return o; });
 const texts = (await figma.getLocalTextStylesAsync()).map(s => ({ n: s.name, f: s.fontName.family, s: s.fontName.style, z: s.fontSize, lh: s.lineHeight.unit === 'AUTO' ? null : Math.round(s.lineHeight.value * 10) / 10, lu: s.lineHeight.unit }));
-return { file: figma.root.name, pages: figma.root.children.map(p => ({ id: p.id, name: p.name })), hasColorCollection: !!colorCol, colorVars, fontVars,
+return { file: figma.root.name, pages: figma.root.children.map(p => ({ id: p.id, name: p.name })), hasColorCollection: !!colorCol, colorVars, roles, fontVars,
   paints, texts, effects: (await figma.getLocalEffectStylesAsync()).map(s => s.name) };"""
 
 
@@ -183,7 +188,7 @@ def board_summary(state):
             "icons": count("icons"), "visuals": count("visuals"),
             "logo_sets": [s["name"] for s in ((state or {}).get("logos") or {}).get("sets", [])],
             "pages_found": [k for k in PAGE_KINDS if (state or {}).get(k)],
-            "roles": {v["n"]: v["hex"] for v in core.get("colorVars", []) if v["n"] in ROLES},
+            "roles": core.get("roles") or {v["n"]: v["hex"] for v in core.get("colorVars", []) if v["n"] in ROLES},
             "paints": core.get("paints", []), "texts": core.get("texts", []),
             "logo_slots": [f"{s['name']}|{v.split('=')[-1]}" for s in ((state or {}).get("logos") or {}).get("sets", []) for v in s.get("variants", [])]}
 
@@ -225,7 +230,30 @@ const colourVar = (name, hex) => {
   let v = vars.find(x => x.variableCollectionId === colorCol.id && x.name === name);
   if (!v) { v = figma.variables.createVariable(name, colorCol, 'COLOR'); v.scopes = []; vars.push(v); log.push('new variable ' + name); }
   v.setValueForMode(colorCol.defaultModeId, rgb(hex)); return v; };
-for (const [role, hex] of Object.entries(D.roles)) { colourVar(role, hex); log.push('role ' + role + ' = ' + hex); }
+if (Object.keys(D.roles).length) {
+  // Roles live in their own collection ("Primary", "Text color"…) and alias colour variables whose
+  // names vary from file to file, so each role gets its own colour variable and is re-pointed at it.
+  const RN = { primary: 'Primary', secondary: 'Secondary', tertiary: 'Tertiary', text: 'Text color', background: 'Background color' };
+  const roleCol = cols.find(c => vars.some(v => v.variableCollectionId === c.id && v.name === 'Primary'));
+  if (!roleCol) log.push('SKIPPED colour roles: this file has no role variables (Primary, Secondary, …)');
+  else {
+    const rv = Object.fromEntries(Object.entries(RN).map(([k, n]) => [k, vars.find(v => v.variableCollectionId === roleCol.id && v.name === n)]));
+    const aliasOf = (v, modeId) => { const a = v && v.valuesByMode[modeId]; return a && a.type === 'VARIABLE_ALIAS' ? a.id : null; };
+    const def = Object.fromEntries(Object.keys(RN).map(k => [k, aliasOf(rv[k], roleCol.defaultModeId)]));
+    const fresh = {};
+    for (const [role, hex] of Object.entries(D.roles)) { if (rv[role]) fresh[role] = colourVar(role, hex); else log.push('SKIPPED role ' + role + ': no such role variable'); }
+    for (const role of Object.keys(fresh)) for (const m of roleCol.modes) {
+      const cur = aliasOf(rv[role], m.modeId);
+      let target = fresh[role];
+      if (cur && cur !== def[role]) {  // this mode borrows another role's colour (dark mode swaps text and background)
+        const owners = Object.keys(def).filter(k => def[k] === cur);
+        target = owners.length === 1 ? (fresh[owners[0]] || null) : fresh[role];
+      }
+      if (target) rv[role].setValueForMode(m.modeId, figma.variables.createVariableAlias(target));
+    }
+    for (const role of Object.keys(fresh)) log.push('role ' + role + ' = ' + D.roles[role]);
+  }
+}
 for (const c of D.colors) {
   const v = colourVar(c.variable, c.hex);
   let s = styles.find(x => x.name.toLowerCase() === c.style.toLowerCase());
@@ -296,6 +324,50 @@ const scaleTo = (art, f) => { if (Math.abs(f - 1) < 0.02) return;
 const fit = (sec, pad) => { const kids = sec.children; if (!kids.length) return;
   sec.resizeWithoutConstraints(Math.max(sec.width, Math.max(...kids.map(k => k.x + k.width)) + pad), Math.max(...kids.map(k => k.y + k.height)) + pad); };
 """
+
+
+def colours_board_script(page_id, items):
+    """Add or refresh a specimen card on the Colours page for each colour, bound to its variable."""
+    return (_JS_HELPERS + f"const PAGE_ID = {json.dumps(page_id)}, ITEMS = {json.dumps(items, ensure_ascii=False)};\n" + """const page = await figma.getNodeByIdAsync(PAGE_ID);
+await figma.setCurrentPageAsync(page);
+const log = [], created = [], changed = [];
+const vars = await figma.variables.getLocalVariablesAsync();
+const cols = await figma.variables.getLocalVariableCollectionsAsync();
+const colorCol = cols.find(c => /^colou?rs?$/i.test(c.name));
+const isSpec = n => n.type === 'FRAME' && n.children.some(k => k.name === 'Color block');
+const group = page.findOne(n => n.type === 'FRAME' && n.children.some(isSpec));
+if (!group) throw new Error('No colour specimen to copy on this page (a frame containing a layer named "Color block").');
+const specs = () => group.children.filter(isSpec);
+const tmpl = specs()[0];
+const uniq = a => [...new Set(a.map(Math.round))].sort((x, y) => x - y);
+const xs = uniq(specs().map(c => c.x)), ys = uniq(specs().map(c => c.y));
+const perRow = Math.max(1, xs.length), dx = xs.length > 1 ? xs[1] - xs[0] : tmpl.width + 18, dy = ys.length > 1 ? ys[1] - ys[0] : tmpl.height + 20;
+const padBottom = Math.max(16, group.height - Math.max(...specs().map(c => c.y + c.height)));
+const setText = async (t, str) => { for (const seg of t.getStyledTextSegments(['fontName'])) await figma.loadFontAsync(seg.fontName); t.characters = str; };
+const prefix = tmpl.name.includes('/') ? tmpl.name.slice(0, tmpl.name.lastIndexOf('/') + 1) : 'Colour specimen/';
+for (const it of ITEMS) {
+  const v = colorCol && vars.find(x => x.variableCollectionId === colorCol.id && x.name === it.variable);
+  let card = specs().find(c => c.name.toLowerCase() === (prefix + it.name).toLowerCase());
+  if (card) changed.push(card.id);
+  else { const n = specs().length; card = tmpl.clone(); group.appendChild(card); card.name = prefix + it.name;
+    card.x = xs[0] + (n % perRow) * dx; card.y = ys[0] + Math.floor(n / perRow) * dy; created.push(card.id); }
+  const block = card.children.find(k => k.name === 'Color block');
+  const paint = { type: 'SOLID', color: rgb(it.hex) };
+  block.fills = [v ? figma.variables.setBoundVariableForPaint(paint, 'color', v) : paint];
+  const label = card.findOne(k => k.type === 'TEXT' && k.name === 'Colour Name');
+  if (label) await setText(label, it.name);
+}
+// every HEX label is plain text, so rewrite each one from the colour its block now shows
+for (const c of specs()) {
+  const f = c.children.find(k => k.name === 'Color block').fills[0], t = c.findOne(k => k.type === 'TEXT' && k.name === 'Colour HEX');
+  if (f && f.type === 'SOLID' && t) { const h = hx(f.color).toLowerCase(); if (t.characters !== h) { await setText(t, h); if (!created.includes(c.id) && !changed.includes(c.id)) changed.push(c.id); } }
+}
+const need = Math.max(...specs().map(c => c.y + c.height)) + padBottom;
+if (need > group.height) {
+  const grow = need - group.height; group.resize(group.width, need);
+  const sec = group.parent; if (sec && sec.type === 'SECTION') sec.resizeWithoutConstraints(sec.width, sec.height + grow);
+}
+return { group: group.id, created, changed, log };""")
 
 
 def place_icons_script(page_id, step_id, items):
@@ -417,9 +489,17 @@ def build_plan(brand, elements, compared, review, state):
         n = len(tokens["colors"]), len(tokens["gradients"]), len(tokens["text"]), len(tokens["roles"])
         steps.append({"id": "tokens", "kind": "script", "code": tokens_script(tokens),
                       "title": f"Write {n[0]} colours, {n[1]} gradients, {n[2]} text styles and {n[3]} colour roles"})
+    colour_page = next((pg["id"] for pg in core.get("pages", []) if re.search(r"\bcolou?rs?\b", pg["name"], re.I)), None)
+    if tokens["colors"] or tokens["roles"]:
+        if colour_page:
+            cards = [{"name": c["style"].split("/", 1)[-1], "variable": c["variable"], "hex": c["hex"]} for c in tokens["colors"]]
+            steps.append({"id": "colour-board", "kind": "script", "code": colours_board_script(colour_page, cards),
+                          "title": f"Update the Colours page ({len(cards)} specimen{'s' if len(cards) != 1 else ''}, and every HEX label)"})
+        else:
+            skipped_early = "the Colours page: no page with that name was found, so only variables and styles were written"
     slots = review.get("logo_slots") or {}
     groups = [("icons", "icon", place_icons_script, 40), ("visuals", "image", place_images_script, 30), ("logos", "logo", place_logos_script, 20)]
-    skipped = []
+    skipped = [locals()["skipped_early"]] if "skipped_early" in locals() else []
     for kind, etype, maker, batch in groups:
         items = [e for e in chosen if (e["type"] == etype or (etype == "image" and e["type"] == "graphic")) and e.get("asset")]
         if not items:

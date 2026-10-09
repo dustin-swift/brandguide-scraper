@@ -44,8 +44,8 @@ and a temp folder until the app stops. The Figma file is the record, which is wh
 
 | Item | In the Figma file |
 |---|---|
-| Colours | A variable in the `Color` collection plus a `Brand/<Name>` colour style bound to it |
-| Colour roles | The `primary`, `secondary`, `tertiary`, `text` and `background` colour variables |
+| Colours | A variable in the `Color` collection, a `Brand/<Name>` colour style bound to it, and a specimen card on the Colours page |
+| Colour roles | The role variables (`Primary`, `Secondary`, `Tertiary`, `Text color`, `Background color`) are pointed at the chosen colours |
 | Gradients | `Gradient/<Name>` colour styles |
 | Text styles | An existing text style you choose, or a new one. Skipped if the font is not installed in Figma |
 | Icons | Components named `Brand/Icon <Name>` in a "Brand Icons" section on the Icons page |

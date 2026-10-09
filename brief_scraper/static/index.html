@@ -334,6 +334,7 @@ function apply() {
       s.result ? h("span", { class: s.result.ok ? "ok" : "bad" }, s.result.ok ? "· done " + s.result.at : "· failed") : h("span", { class: "meta" }, "· waiting"), lines(s))))),
     done === p.steps.length && h("div", { class: "panel" }, h("h3", {}, failed.length ? "Finished with problems" : "Finished"),
       h("div", {}, "In Figma, open the DesignOps plugin and press ", h("strong", {}, "Update & rescan"), " so the CMS picks up the changes."),
+      h("div", { class: "meta", style: { marginTop: "8px" } }, "If logos or icons look scrambled in Figma, reload the file (Cmd+R). The file is correct; the open window can show a stale drawing."),
       h("div", { class: "meta", style: { marginTop: "8px" } }, "To check the result here, scan the board again in step 2; items you wrote should now show as already on the board.")));
 }
 
